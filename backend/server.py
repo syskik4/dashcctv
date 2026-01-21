@@ -1,70 +1,169 @@
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, HTTPException, Query
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy import text
 import os
 import logging
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict
-from typing import List
-import uuid
-from datetime import datetime, timezone
-
+from pydantic import BaseModel
+from typing import List, Optional, Any
+from collections import Counter
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+# Supabase PostgreSQL connection
+DATABASE_URL = os.environ.get('DATABASE_URL')
+ASYNC_DATABASE_URL = DATABASE_URL.replace('postgresql://', 'postgresql+asyncpg://')
 
-# Create the main app without a prefix
+engine = create_async_engine(
+    ASYNC_DATABASE_URL,
+    pool_size=10,
+    max_overflow=5,
+    pool_timeout=30,
+    pool_recycle=1800,
+    pool_pre_ping=False,
+    echo=False,
+    connect_args={
+        "statement_cache_size": 0,
+        "command_timeout": 30,
+    }
+)
+
+AsyncSessionLocal = async_sessionmaker(
+    bind=engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+    autocommit=False,
+    autoflush=False
+)
+
+async def get_db():
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+        finally:
+            await session.close()
+
+# Create the main app
 app = FastAPI()
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
+# Pydantic Models
+class ControlRecord(BaseModel):
+    id: Optional[int] = None
+    empresa: Optional[str] = None
+    sucursal: Optional[str] = None
+    serie_dvr: Optional[str] = None
+    modelo_dvr: Optional[str] = None
+    puertos_dvr: Optional[int] = None
+    cams_instaladas: Optional[int] = None
+    cam_audio: Optional[int] = None
+    region: Optional[str] = None
+    tipo_instalacion: Optional[str] = None
 
-# Define Models
-class StatusCheck(BaseModel):
-    model_config = ConfigDict(extra="ignore")  # Ignore MongoDB's _id field
-    
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_name: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+class DashboardStats(BaseModel):
+    total_sucursales: int
+    total_camaras: int
+    camaras_con_audio: int
+    camaras_sin_audio: int
+    porcentaje_audio: float
+    porcentaje_sin_audio: float
 
-class StatusCheckCreate(BaseModel):
-    client_name: str
+class RegionData(BaseModel):
+    region: str
+    count: int
+    total_camaras: int
 
-# Add your routes to the router instead of directly to app
+class TipoInstalacionData(BaseModel):
+    tipo: str
+    count: int
+
+# Routes
 @api_router.get("/")
 async def root():
-    return {"message": "Hello World"}
+    return {"message": "Camera Control Dashboard API"}
 
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.model_dump()
-    status_obj = StatusCheck(**status_dict)
-    
-    # Convert to dict and serialize datetime to ISO string for MongoDB
-    doc = status_obj.model_dump()
-    doc['timestamp'] = doc['timestamp'].isoformat()
-    
-    _ = await db.status_checks.insert_one(doc)
-    return status_obj
+@api_router.get("/control", response_model=List[dict])
+async def get_all_control():
+    """Get all records from Control table"""
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(text("SELECT * FROM \"Control\" ORDER BY id"))
+        rows = result.fetchall()
+        columns = result.keys()
+        records = [dict(zip(columns, row)) for row in rows]
+        return records
 
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    # Exclude MongoDB's _id field from the query results
-    status_checks = await db.status_checks.find({}, {"_id": 0}).to_list(1000)
-    
-    # Convert ISO string timestamps back to datetime objects
-    for check in status_checks:
-        if isinstance(check['timestamp'], str):
-            check['timestamp'] = datetime.fromisoformat(check['timestamp'])
-    
-    return status_checks
+@api_router.get("/stats", response_model=DashboardStats)
+async def get_dashboard_stats():
+    """Get dashboard statistics"""
+    async with AsyncSessionLocal() as session:
+        # Get all records
+        result = await session.execute(text("SELECT sucursal, cams_instaladas, cam_audio FROM \"Control\""))
+        rows = result.fetchall()
+        
+        # Calculate stats
+        sucursales = set()
+        total_camaras = 0
+        total_audio = 0
+        
+        for row in rows:
+            sucursal, cams, audio = row
+            if sucursal:
+                sucursales.add(sucursal)
+            if cams:
+                total_camaras += int(cams)
+            if audio:
+                total_audio += int(audio)
+        
+        camaras_sin_audio = total_camaras - total_audio
+        porcentaje_audio = (total_audio / total_camaras * 100) if total_camaras > 0 else 0
+        porcentaje_sin_audio = (camaras_sin_audio / total_camaras * 100) if total_camaras > 0 else 0
+        
+        return DashboardStats(
+            total_sucursales=len(sucursales),
+            total_camaras=total_camaras,
+            camaras_con_audio=total_audio,
+            camaras_sin_audio=camaras_sin_audio,
+            porcentaje_audio=round(porcentaje_audio, 1),
+            porcentaje_sin_audio=round(porcentaje_sin_audio, 1)
+        )
+
+@api_router.get("/regions", response_model=List[RegionData])
+async def get_regions_data():
+    """Get data grouped by region for bar chart"""
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            text("SELECT region, COUNT(*) as count, COALESCE(SUM(cams_instaladas), 0) as total_cams FROM \"Control\" WHERE region IS NOT NULL GROUP BY region ORDER BY count DESC")
+        )
+        rows = result.fetchall()
+        return [RegionData(region=row[0], count=row[1], total_camaras=int(row[2])) for row in rows]
+
+@api_router.get("/tipos-instalacion", response_model=List[TipoInstalacionData])
+async def get_tipos_instalacion():
+    """Get data grouped by installation type for pie chart"""
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            text("SELECT tipo_instalacion, COUNT(*) as count FROM \"Control\" WHERE tipo_instalacion IS NOT NULL GROUP BY tipo_instalacion ORDER BY count DESC")
+        )
+        rows = result.fetchall()
+        return [TipoInstalacionData(tipo=row[0], count=row[1]) for row in rows]
+
+@api_router.get("/search")
+async def search_by_sucursal(sucursal: str = Query(..., min_length=1)):
+    """Search records by sucursal name"""
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            text("SELECT * FROM \"Control\" WHERE LOWER(sucursal) LIKE LOWER(:search)"),
+            {"search": f"%{sucursal}%"}
+        )
+        rows = result.fetchall()
+        columns = result.keys()
+        records = [dict(zip(columns, row)) for row in rows]
+        return records
 
 # Include the router in the main app
 app.include_router(api_router)
@@ -85,5 +184,5 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 @app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
+async def shutdown_db():
+    await engine.dispose()
