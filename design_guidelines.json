@@ -1,0 +1,144 @@
+{
+  "identity": {
+    "persona": "E1: The Anti-AI Designer",
+    "principles": [
+      "Fusion over Imitation",
+      "Emotion First",
+      "Content is King",
+      "Zoom In",
+      "Negative Space",
+      "Contrast"
+    ]
+  },
+  "project_context": {
+    "app_type": "dashboard",
+    "theme_mode": "dark",
+    "industry": "Security & Surveillance",
+    "target_audience": "Corporate Security Managers",
+    "emotional_tone": "Tactical, Precise, Reliable, High-Tech"
+  },
+  "design_system": {
+    "typography": {
+      "font_family": {
+        "headings": "Manrope, sans-serif",
+        "body": "IBM Plex Sans, sans-serif",
+        "mono": "JetBrains Mono, monospace"
+      },
+      "scale": {
+        "h1": "text-4xl font-bold tracking-tight",
+        "h2": "text-3xl font-semibold tracking-tight",
+        "h3": "text-2xl font-semibold tracking-tight",
+        "body": "text-sm leading-relaxed",
+        "caption": "text-xs text-muted-foreground uppercase tracking-wider"
+      },
+      "rules": [
+        "Use 'Manrope' for all headings to give a modern, technical feel.",
+        "Use 'IBM Plex Sans' for body text for maximum legibility in data-dense views.",
+        "Use 'JetBrains Mono' for any IP addresses, serial numbers, or code-like data."
+      ]
+    },
+    "colors": {
+      "palette": {
+        "background": "#020617",
+        "surface": "#0f172a",
+        "surface_highlight": "#1e293b",
+        "border": "#1e293b",
+        "primary": "#3b82f6",
+        "primary_foreground": "#ffffff",
+        "secondary": "#64748b",
+        "accent_success": "#10b981",
+        "accent_warning": "#f59e0b",
+        "accent_danger": "#ef4444",
+        "text_primary": "#f8fafc",
+        "text_secondary": "#94a3b8"
+      },
+      "usage": {
+        "background": "bg-[#020617]",
+        "card_bg": "bg-[#0f172a]",
+        "border_color": "border-[#1e293b]",
+        "text_main": "text-slate-50",
+        "text_muted": "text-slate-400"
+      },
+      "gradients": {
+        "subtle_glow": "bg-gradient-to-b from-blue-500/10 to-transparent"
+      }
+    },
+    "layout": {
+      "grid_system": "Bento Grid Mode B (High Density)",
+      "spacing": {
+        "container_padding": "p-6 md:p-8",
+        "gap": "gap-4 md:gap-6",
+        "internal_padding": "p-4"
+      },
+      "structure": [
+        "Header: Sticky, glassmorphism effect, contains Logo and User Profile.",
+        "Summary Section: Grid of 4 cards (Total Branches, Total Cameras, Audio, No Audio).",
+        "Analytics Section: Split view (2/3 Bar Chart, 1/3 Pie Chart).",
+        "Data Section: Full-width interactive table with search and filters."
+      ]
+    },
+    "components": {
+      "cards": {
+        "style": "Flat, 1px border (border-slate-800), no shadow, bg-slate-950/50 backdrop-blur-sm.",
+        "hover": "hover:border-slate-700 transition-colors duration-200"
+      },
+      "buttons": {
+        "primary": "bg-blue-600 hover:bg-blue-700 text-white shadow-[0_0_15px_rgba(59,130,246,0.5)] rounded-md",
+        "secondary": "bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-md",
+        "ghost": "hover:bg-slate-800/50 text-slate-400 hover:text-white"
+      },
+      "inputs": {
+        "style": "bg-slate-950 border-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-md"
+      },
+      "charts": {
+        "library": "Recharts (via Shadcn Charts)",
+        "theme": "Dark mode optimized, minimal grid lines, vibrant data colors (Blue, Emerald, Amber, Rose)"
+      }
+    },
+    "visual_enhancers": {
+      "glassmorphism": "backdrop-blur-xl bg-slate-950/70 border-b border-slate-800/50",
+      "borders": "1px solid rgba(255,255,255,0.08)",
+      "shadows": "none (rely on borders and contrast)",
+      "icons": "Lucide React (stroke-width=1.5 for elegance)"
+    },
+    "motion": {
+      "transitions": "transition-all duration-200 ease-out",
+      "hover_effects": "translate-y-[-2px]",
+      "loading": "Skeleton loaders with shimmering gradient"
+    }
+  },
+  "assets": {
+    "icons": {
+      "library": "lucide-react",
+      "style": "Stroke width 1.5px, size 16px-20px"
+    },
+    "images": [
+      {
+        "category": "login_background",
+        "url": "https://images.unsplash.com/photo-1766864109234-275ce351000f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxOTF8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBjb3Jwb3JhdGUlMjBvZmZpY2UlMjBidWlsZGluZyUyMG5pZ2h0fGVufDB8fHx8MTc2OTAzMjgzNHww&ixlib=rb-4.1.0&q=85",
+        "description": "Modern corporate building at night for login screen background"
+      },
+      {
+        "category": "empty_state",
+        "url": "https://images.unsplash.com/photo-1702471897816-4156a0a302f4?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxNzV8MHwxfHNlYXJjaHwxfHxhYnN0cmFjdCUyMHRlY2hub2xvZ3klMjBzZWN1cml0eSUyMGNhbWVyYSUyMGRhcmslMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc2OTAzMjgzMnww&ixlib=rb-4.1.0&q=85",
+        "description": "Abstract camera technology for empty states or 404 pages"
+      }
+    ]
+  },
+  "implementation_steps": [
+    "1. Setup: Install 'lucide-react', 'recharts', 'clsx', 'tailwind-merge' if missing.",
+    "2. Theme: Configure 'tailwind.config.js' with the custom color palette (Obsidian/Slate).",
+    "3. Layout: Create the main 'DashboardLayout' with a sticky sidebar/header.",
+    "4. Components: Customize Shadcn components (Card, Table, Input) to match the 'Tactical' aesthetic (remove heavy shadows, add borders).",
+    "5. Features: Implement the Summary Cards, then Charts, then the Data Table.",
+    "6. Polish: Add micro-interactions (hover states) and ensure responsive behavior."
+  ],
+  "universal_guidelines": [
+    "DO NOT use generic gradients. Use solid, deep colors.",
+    "Ensure all text has sufficient contrast (WCAG AA).",
+    "Use 'data-testid' for all interactive elements.",
+    "Avoid 'AI Slop' - make it look engineered, not generated.",
+    "Use 'sonner' for notifications.",
+    "Keep the UI dense but legible - this is a monitoring tool."
+  ]
+}
