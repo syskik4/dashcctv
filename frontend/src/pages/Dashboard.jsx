@@ -188,7 +188,7 @@ const Dashboard = () => {
             testId="stat-camaras"
           />
           <StatsCard
-            title="Cámaras con Audio"
+            title="Sucursales con Audio"
             value={stats?.camaras_con_audio || 0}
             icon={Volume2}
             color="amber"
@@ -197,7 +197,7 @@ const Dashboard = () => {
             testId="stat-audio"
           />
           <StatsCard
-            title="Cámaras sin Audio"
+            title="Sucursales sin Audio"
             value={stats?.camaras_sin_audio || 0}
             icon={VolumeX}
             color="rose"
