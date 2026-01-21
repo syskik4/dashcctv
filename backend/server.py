@@ -108,7 +108,8 @@ async def get_dashboard_stats():
         # Calculate stats
         sucursales = set()
         total_camaras = 0
-        total_audio = 0
+        sucursales_con_audio = 0
+        sucursales_sin_audio = 0
         
         for row in rows:
             sucursal, cams, audio = row
@@ -116,18 +117,21 @@ async def get_dashboard_stats():
                 sucursales.add(sucursal)
             if cams:
                 total_camaras += int(cams)
-            if audio:
-                total_audio += int(audio)
+            # Contar sucursales con/sin audio
+            if audio and int(audio) > 0:
+                sucursales_con_audio += 1
+            else:
+                sucursales_sin_audio += 1
         
-        camaras_sin_audio = total_camaras - total_audio
-        porcentaje_audio = (total_audio / total_camaras * 100) if total_camaras > 0 else 0
-        porcentaje_sin_audio = (camaras_sin_audio / total_camaras * 100) if total_camaras > 0 else 0
+        total_registros = len(rows)
+        porcentaje_audio = (sucursales_con_audio / total_registros * 100) if total_registros > 0 else 0
+        porcentaje_sin_audio = (sucursales_sin_audio / total_registros * 100) if total_registros > 0 else 0
         
         return DashboardStats(
             total_sucursales=len(sucursales),
             total_camaras=total_camaras,
-            camaras_con_audio=total_audio,
-            camaras_sin_audio=camaras_sin_audio,
+            camaras_con_audio=sucursales_con_audio,
+            camaras_sin_audio=sucursales_sin_audio,
             porcentaje_audio=round(porcentaje_audio, 1),
             porcentaje_sin_audio=round(porcentaje_sin_audio, 1)
         )
