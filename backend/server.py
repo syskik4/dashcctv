@@ -456,7 +456,7 @@ class SucursalUpdate(BaseModel):
     tipo_instalacion: Optional[str] = None
 
 @api_router.put("/sucursal/{sucursal_id}")
-async def update_sucursal(sucursal_id: int, data: SucursalUpdate, current_user: dict = Depends(require_admin)):
+async def update_sucursal(sucursal_id: str, data: SucursalUpdate, current_user: dict = Depends(require_admin)):
     """Update a sucursal (admin only)"""
     async with AsyncSessionLocal() as session:
         # Build update query dynamically
