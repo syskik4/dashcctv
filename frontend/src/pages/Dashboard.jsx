@@ -600,6 +600,11 @@ const Dashboard = () => {
               <UserManagement token={token} />
             </TabsContent>
           )}
+
+          {/* Control Sucursales Tab */}
+          <TabsContent value="sucursales">
+            <ControlSucursales token={token} userRole={user.rol} />
+          </TabsContent>
         </Tabs>
       </main>
 
