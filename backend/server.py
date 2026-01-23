@@ -431,7 +431,7 @@ async def search_by_sucursal(sucursal: str = Query(..., min_length=1), current_u
         return records
 
 @api_router.get("/sucursal/{sucursal_id}")
-async def get_sucursal_by_id(sucursal_id: int, current_user: dict = Depends(get_current_user)):
+async def get_sucursal_by_id(sucursal_id: str, current_user: dict = Depends(get_current_user)):
     """Get a single sucursal by ID"""
     async with AsyncSessionLocal() as session:
         result = await session.execute(
