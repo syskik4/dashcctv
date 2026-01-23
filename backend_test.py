@@ -9,6 +9,7 @@ class CameraDashboardAPITester:
         self.tests_run = 0
         self.tests_passed = 0
         self.test_results = []
+        self.token = None
 
     def run_test(self, name, method, endpoint, expected_status, data=None, validate_response=None):
         """Run a single API test"""
