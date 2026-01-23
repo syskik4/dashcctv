@@ -430,6 +430,75 @@ async def search_by_sucursal(sucursal: str = Query(..., min_length=1), current_u
         records = [dict(zip(columns, row)) for row in rows]
         return records
 
+@api_router.get("/sucursal/{sucursal_id}")
+async def get_sucursal_by_id(sucursal_id: int, current_user: dict = Depends(get_current_user)):
+    """Get a single sucursal by ID"""
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            text('SELECT * FROM "Control" WHERE id = :id'),
+            {"id": sucursal_id}
+        )
+        row = result.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Sucursal no encontrada")
+        columns = result.keys()
+        return dict(zip(columns, row))
+
+class SucursalUpdate(BaseModel):
+    empresa: Optional[str] = None
+    sucursal: Optional[str] = None
+    serie_dvr: Optional[str] = None
+    modelo_dvr: Optional[str] = None
+    puertos_dvr: Optional[int] = None
+    cams_instaladas: Optional[int] = None
+    cam_audio: Optional[int] = None
+    region: Optional[str] = None
+    tipo_instalacion: Optional[str] = None
+
+@api_router.put("/sucursal/{sucursal_id}")
+async def update_sucursal(sucursal_id: int, data: SucursalUpdate, current_user: dict = Depends(require_admin)):
+    """Update a sucursal (admin only)"""
+    async with AsyncSessionLocal() as session:
+        # Build update query dynamically
+        updates = []
+        params = {"id": sucursal_id}
+        
+        update_fields = data.model_dump(exclude_unset=True)
+        for field, value in update_fields.items():
+            if value is not None:
+                updates.append(f"{field} = :{field}")
+                params[field] = value
+        
+        if not updates:
+            raise HTTPException(status_code=400, detail="No hay datos para actualizar")
+        
+        query = f'UPDATE "Control" SET {", ".join(updates)} WHERE id = :id RETURNING *'
+        result = await session.execute(text(query), params)
+        row = result.fetchone()
+        await session.commit()
+        
+        if not row:
+            raise HTTPException(status_code=404, detail="Sucursal no encontrada")
+        
+        columns = result.keys()
+        return dict(zip(columns, row))
+
+@api_router.delete("/sucursal/{sucursal_id}")
+async def delete_sucursal(sucursal_id: int, current_user: dict = Depends(require_admin)):
+    """Delete a sucursal (admin only)"""
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            text('DELETE FROM "Control" WHERE id = :id RETURNING id'),
+            {"id": sucursal_id}
+        )
+        deleted = result.fetchone()
+        await session.commit()
+        
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Sucursal no encontrada")
+        
+        return {"message": "Sucursal eliminada correctamente"}
+
 # Include the router in the main app
 app.include_router(api_router)
 
