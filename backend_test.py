@@ -158,16 +158,54 @@ class CameraDashboardAPITester:
         print(f"   Found {len(data)} control records")
         return True
 
-    def test_search_functionality(self, search_term="CDMX"):
-        """Test search endpoint with a specific term"""
+    def test_login(self, email="admin@sistema.com", password="admin123"):
+        """Test login and get token"""
         success, response = self.run_test(
-            f"Search by sucursal '{search_term}'",
-            "GET",
-            f"search?sucursal={search_term}",
+            "Admin Login",
+            "POST",
+            "auth/login",
             200,
-            validate_response=lambda data: isinstance(data, list)
+            data={"email": email, "password": password}
         )
-        return success
+        if success and 'access_token' in response:
+            self.token = response['access_token']
+            print(f"   ✅ Login successful, token obtained")
+            return True
+        return False
+
+    def test_sucursal_by_id(self, sucursal_id):
+        """Test getting a specific sucursal by ID"""
+        success, response = self.run_test(
+            f"Get Sucursal by ID {sucursal_id}",
+            "GET",
+            f"sucursal/{sucursal_id}",
+            200,
+            validate_response=lambda data: 'id' in data and data['id'] == sucursal_id
+        )
+        return success, response
+
+    def test_update_sucursal(self, sucursal_id, update_data):
+        """Test updating a sucursal (admin only)"""
+        success, response = self.run_test(
+            f"Update Sucursal {sucursal_id}",
+            "PUT",
+            f"sucursal/{sucursal_id}",
+            200,
+            data=update_data,
+            validate_response=lambda data: 'id' in data and data['id'] == sucursal_id
+        )
+        return success, response
+
+    def test_delete_sucursal(self, sucursal_id):
+        """Test deleting a sucursal (admin only)"""
+        success, response = self.run_test(
+            f"Delete Sucursal {sucursal_id}",
+            "DELETE",
+            f"sucursal/{sucursal_id}",
+            200,
+            validate_response=lambda data: 'message' in data
+        )
+        return success, response
 
 def main():
     # Setup
