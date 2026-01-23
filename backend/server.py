@@ -484,7 +484,7 @@ async def update_sucursal(sucursal_id: str, data: SucursalUpdate, current_user: 
         return dict(zip(columns, row))
 
 @api_router.delete("/sucursal/{sucursal_id}")
-async def delete_sucursal(sucursal_id: int, current_user: dict = Depends(require_admin)):
+async def delete_sucursal(sucursal_id: str, current_user: dict = Depends(require_admin)):
     """Delete a sucursal (admin only)"""
     async with AsyncSessionLocal() as session:
         result = await session.execute(
