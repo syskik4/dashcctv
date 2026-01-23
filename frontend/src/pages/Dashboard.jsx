@@ -283,6 +283,14 @@ const Dashboard = () => {
               <LayoutDashboard className="w-4 h-4 mr-2" />
               Dashboard
             </TabsTrigger>
+            <TabsTrigger
+              data-testid="tab-sucursales"
+              value="sucursales"
+              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+            >
+              <MapPin className="w-4 h-4 mr-2" />
+              Control Sucursales
+            </TabsTrigger>
             {user.rol === "admin" && (
               <TabsTrigger
                 data-testid="tab-users"
