@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import {
@@ -15,11 +15,22 @@ import {
   Monitor,
   Cable,
   Hash,
+  ChevronLeft,
+  ChevronRight,
+  ArrowUpDown,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -49,13 +60,17 @@ import {
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const ControlSucursales = ({ token, userRole }) => {
+  const [allData, setAllData] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [searchResults, setSearchResults] = useState([]);
+  const [searchResults, setSearchResults] = useState(null);
   const [selectedSucursal, setSelectedSucursal] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [editData, setEditData] = useState({});
+  const [currentPage, setCurrentPage] = useState(1);
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+  const itemsPerPage = 10;
 
   const isAdmin = userRole === "admin";
 
@@ -63,9 +78,27 @@ const ControlSucursales = ({ token, userRole }) => {
     headers: { Authorization: `Bearer ${token}` },
   });
 
+  useEffect(() => {
+    fetchAllData();
+  }, []);
+
+  const fetchAllData = async () => {
+    setLoading(true);
+    try {
+      const response = await axiosAuth.get(`${API}/control`);
+      setAllData(response.data);
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      toast.error("Error al cargar los datos");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSearch = async () => {
     if (!searchTerm.trim()) {
-      toast.error("Ingrese un término de búsqueda");
+      setSearchResults(null);
+      setSelectedSucursal(null);
       return;
     }
 
@@ -74,6 +107,7 @@ const ControlSucursales = ({ token, userRole }) => {
       const response = await axiosAuth.get(`${API}/search?sucursal=${encodeURIComponent(searchTerm)}`);
       setSearchResults(response.data);
       setSelectedSucursal(null);
+      setCurrentPage(1);
       if (response.data.length === 0) {
         toast.info("No se encontraron sucursales");
       } else {
@@ -87,23 +121,65 @@ const ControlSucursales = ({ token, userRole }) => {
     }
   };
 
+  const clearSearch = () => {
+    setSearchTerm("");
+    setSearchResults(null);
+    setSelectedSucursal(null);
+  };
+
   const handleSelectSucursal = (sucursal) => {
     setSelectedSucursal(sucursal);
   };
 
-  const openEditDialog = () => {
-    if (selectedSucursal) {
-      setEditData({ ...selectedSucursal });
-      setShowEditDialog(true);
+  const handleSort = (key) => {
+    let direction = "asc";
+    if (sortConfig.key === key && sortConfig.direction === "asc") {
+      direction = "desc";
     }
+    setSortConfig({ key, direction });
+  };
+
+  const displayData = searchResults || allData;
+
+  const sortedData = useMemo(() => {
+    if (!sortConfig.key) return displayData;
+    return [...displayData].sort((a, b) => {
+      const aVal = a[sortConfig.key] ?? "";
+      const bVal = b[sortConfig.key] ?? "";
+      if (aVal < bVal) return sortConfig.direction === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [displayData, sortConfig]);
+
+  const totalPages = Math.ceil(sortedData.length / itemsPerPage);
+  const paginatedData = sortedData.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  const openEditDialog = (sucursal) => {
+    setSelectedSucursal(sucursal);
+    setEditData({ ...sucursal });
+    setShowEditDialog(true);
+  };
+
+  const openDeleteDialog = (sucursal) => {
+    setSelectedSucursal(sucursal);
+    setShowDeleteDialog(true);
   };
 
   const handleUpdate = async () => {
     try {
       const response = await axiosAuth.put(`${API}/sucursal/${selectedSucursal.id}`, editData);
       toast.success("Sucursal actualizada correctamente");
-      setSelectedSucursal(response.data);
-      setSearchResults(searchResults.map(s => s.id === response.data.id ? response.data : s));
+      
+      // Update local data
+      setAllData(allData.map(s => s.id === response.data.id ? response.data : s));
+      if (searchResults) {
+        setSearchResults(searchResults.map(s => s.id === response.data.id ? response.data : s));
+      }
+      setSelectedSucursal(null);
       setShowEditDialog(false);
     } catch (error) {
       const message = error.response?.data?.detail || "Error al actualizar";
@@ -115,7 +191,12 @@ const ControlSucursales = ({ token, userRole }) => {
     try {
       await axiosAuth.delete(`${API}/sucursal/${selectedSucursal.id}`);
       toast.success("Sucursal eliminada correctamente");
-      setSearchResults(searchResults.filter(s => s.id !== selectedSucursal.id));
+      
+      // Update local data
+      setAllData(allData.filter(s => s.id !== selectedSucursal.id));
+      if (searchResults) {
+        setSearchResults(searchResults.filter(s => s.id !== selectedSucursal.id));
+      }
       setSelectedSucursal(null);
       setShowDeleteDialog(false);
     } catch (error) {
@@ -124,7 +205,7 @@ const ControlSucursales = ({ token, userRole }) => {
     }
   };
 
-  const clearSelection = () => {
+  const closeDetailCard = () => {
     setSelectedSucursal(null);
   };
 
@@ -144,64 +225,45 @@ const ControlSucursales = ({ token, userRole }) => {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <Input
                 data-testid="sucursal-search-input"
-                placeholder="Buscar sucursal por nombre..."
+                placeholder="Buscar por nombre de sucursal..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSearch()}
                 className="pl-10 bg-slate-950 border-slate-800 focus:border-blue-500"
               />
             </div>
-            <Button
-              data-testid="sucursal-search-btn"
-              onClick={handleSearch}
-              disabled={loading}
-              className="bg-blue-600 hover:bg-blue-700 text-white shadow-[0_0_15px_rgba(59,130,246,0.3)]"
-            >
-              {loading ? (
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : (
-                <>
-                  <Search className="w-4 h-4 mr-2" />
-                  Buscar
-                </>
+            <div className="flex gap-2">
+              <Button
+                data-testid="sucursal-search-btn"
+                onClick={handleSearch}
+                disabled={loading}
+                className="bg-blue-600 hover:bg-blue-700 text-white shadow-[0_0_15px_rgba(59,130,246,0.3)]"
+              >
+                <Search className="w-4 h-4 mr-2" />
+                Buscar
+              </Button>
+              {searchResults && (
+                <Button
+                  data-testid="clear-search-btn"
+                  onClick={clearSearch}
+                  variant="outline"
+                  className="border-slate-700 hover:bg-slate-800"
+                >
+                  Limpiar
+                </Button>
               )}
-            </Button>
-          </div>
-
-          {/* Search Results List */}
-          {searchResults.length > 0 && (
-            <div className="mt-4 space-y-2">
-              <p className="text-sm text-slate-400">
-                {searchResults.length} resultado(s) encontrado(s):
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                {searchResults.map((sucursal) => (
-                  <button
-                    key={sucursal.id}
-                    data-testid={`sucursal-result-${sucursal.id}`}
-                    onClick={() => handleSelectSucursal(sucursal)}
-                    className={`p-3 rounded-lg border text-left transition-all ${
-                      selectedSucursal?.id === sucursal.id
-                        ? "bg-blue-600/20 border-blue-500"
-                        : "bg-slate-900/50 border-slate-800 hover:border-slate-700"
-                    }`}
-                  >
-                    <p className="font-medium text-slate-200 truncate">{sucursal.sucursal}</p>
-                    <p className="text-xs text-slate-400 truncate">{sucursal.empresa}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-xs text-slate-500">{sucursal.region}</span>
-                      <span className="text-xs text-blue-400">{sucursal.cams_instaladas} cámaras</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
             </div>
+          </div>
+          {searchResults && (
+            <p className="text-sm text-slate-400 mt-3">
+              Mostrando {searchResults.length} resultado(s) para "{searchTerm}"
+            </p>
           )}
         </CardContent>
       </Card>
 
       {/* Selected Sucursal Detail Card */}
-      {selectedSucursal && (
+      {selectedSucursal && !showEditDialog && (
         <Card className="bg-slate-950/50 border-slate-800 animate-fade-in">
           <CardHeader className="pb-3">
             <div className="flex items-start justify-between">
@@ -218,7 +280,7 @@ const ControlSucursales = ({ token, userRole }) => {
                       data-testid="edit-sucursal-btn"
                       variant="outline"
                       size="sm"
-                      onClick={openEditDialog}
+                      onClick={() => openEditDialog(selectedSucursal)}
                       className="border-slate-700 hover:bg-slate-800"
                     >
                       <Pencil className="w-4 h-4 mr-1" />
@@ -228,7 +290,7 @@ const ControlSucursales = ({ token, userRole }) => {
                       data-testid="delete-sucursal-btn"
                       variant="outline"
                       size="sm"
-                      onClick={() => setShowDeleteDialog(true)}
+                      onClick={() => openDeleteDialog(selectedSucursal)}
                       className="border-red-700/50 text-red-400 hover:bg-red-500/10"
                     >
                       <Trash2 className="w-4 h-4 mr-1" />
@@ -239,7 +301,7 @@ const ControlSucursales = ({ token, userRole }) => {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={clearSelection}
+                  onClick={closeDetailCard}
                   className="text-slate-400 hover:text-white"
                 >
                   <X className="w-4 h-4" />
@@ -249,76 +311,162 @@ const ControlSucursales = ({ token, userRole }) => {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {/* ID */}
-              <InfoItem
-                icon={Hash}
-                label="ID"
-                value={selectedSucursal.id}
-                color="slate"
-              />
-              
-              {/* Región */}
-              <InfoItem
-                icon={MapPin}
-                label="Región"
-                value={selectedSucursal.region || "No especificada"}
-                color="purple"
-              />
-
-              {/* Tipo de Instalación */}
-              <InfoItem
-                icon={Cable}
-                label="Tipo de Instalación"
-                value={selectedSucursal.tipo_instalacion || "No especificado"}
-                color="teal"
-              />
-
-              {/* Serie DVR */}
-              <InfoItem
-                icon={Server}
-                label="Serie DVR"
-                value={selectedSucursal.serie_dvr || "No especificada"}
-                color="blue"
-                mono
-              />
-
-              {/* Modelo DVR */}
-              <InfoItem
-                icon={Monitor}
-                label="Modelo DVR"
-                value={selectedSucursal.modelo_dvr || "No especificado"}
-                color="indigo"
-              />
-
-              {/* Puertos DVR */}
-              <InfoItem
-                icon={Server}
-                label="Puertos DVR"
-                value={selectedSucursal.puertos_dvr || 0}
-                color="cyan"
-              />
-
-              {/* Cámaras Instaladas */}
-              <InfoItem
-                icon={Camera}
-                label="Cámaras Instaladas"
-                value={selectedSucursal.cams_instaladas || 0}
-                color="emerald"
-                highlight
-              />
-
-              {/* Cámaras con Audio */}
-              <InfoItem
-                icon={Volume2}
-                label="Cámaras con Audio"
-                value={selectedSucursal.cam_audio || 0}
-                color="amber"
-                highlight
-              />
+              <InfoItem icon={Hash} label="ID" value={selectedSucursal.id} color="slate" />
+              <InfoItem icon={MapPin} label="Región" value={selectedSucursal.region || "No especificada"} color="purple" />
+              <InfoItem icon={Cable} label="Tipo de Instalación" value={selectedSucursal.tipo_instalacion || "No especificado"} color="teal" />
+              <InfoItem icon={Server} label="Serie DVR" value={selectedSucursal.serie_dvr || "No especificada"} color="blue" mono />
+              <InfoItem icon={Monitor} label="Modelo DVR" value={selectedSucursal.modelo_dvr || "No especificado"} color="indigo" />
+              <InfoItem icon={Server} label="Puertos DVR" value={selectedSucursal.puertos_dvr || 0} color="cyan" />
+              <InfoItem icon={Camera} label="Cámaras Instaladas" value={selectedSucursal.cams_instaladas || 0} color="emerald" highlight />
+              <InfoItem icon={Volume2} label="Cámaras con Audio" value={selectedSucursal.cam_audio || 0} color="amber" highlight />
             </div>
           </CardContent>
         </Card>
       )}
+
+      {/* Data Table */}
+      <Card className="bg-slate-950/50 border-slate-800 overflow-hidden">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg font-semibold">
+            Registro de Cámaras
+            <span className="text-sm font-normal text-slate-400 ml-2">
+              ({sortedData.length} registros)
+            </span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-slate-800 hover:bg-transparent">
+                  {[
+                    { key: "id", label: "ID" },
+                    { key: "empresa", label: "Empresa" },
+                    { key: "sucursal", label: "Sucursal" },
+                    { key: "serie_dvr", label: "Serie DVR" },
+                    { key: "modelo_dvr", label: "Modelo DVR" },
+                    { key: "puertos_dvr", label: "Puertos" },
+                    { key: "cams_instaladas", label: "Cámaras" },
+                    { key: "cam_audio", label: "Audio" },
+                  ].map((col) => (
+                    <TableHead
+                      key={col.key}
+                      className="text-slate-400 font-medium cursor-pointer hover:text-slate-200 transition-colors"
+                      onClick={() => handleSort(col.key)}
+                    >
+                      <div className="flex items-center gap-1">
+                        {col.label}
+                        <ArrowUpDown className="w-3 h-3" />
+                      </div>
+                    </TableHead>
+                  ))}
+                  {isAdmin && <TableHead className="text-slate-400 font-medium text-right">Acciones</TableHead>}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={isAdmin ? 9 : 8} className="text-center py-8 text-slate-400">
+                      Cargando...
+                    </TableCell>
+                  </TableRow>
+                ) : paginatedData.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={isAdmin ? 9 : 8} className="text-center py-8 text-slate-400">
+                      No se encontraron registros
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  paginatedData.map((row, idx) => (
+                    <TableRow
+                      key={row.id || idx}
+                      data-testid={`table-row-${idx}`}
+                      className={`border-slate-800 hover:bg-slate-900/50 transition-colors cursor-pointer ${
+                        selectedSucursal?.id === row.id ? "bg-blue-600/10" : ""
+                      }`}
+                      onClick={() => handleSelectSucursal(row)}
+                    >
+                      <TableCell className="font-mono text-xs text-slate-400">{row.id}</TableCell>
+                      <TableCell className="font-medium">{row.empresa || "-"}</TableCell>
+                      <TableCell>{row.sucursal || "-"}</TableCell>
+                      <TableCell className="font-mono text-xs">{row.serie_dvr || "-"}</TableCell>
+                      <TableCell className="text-sm">{row.modelo_dvr || "-"}</TableCell>
+                      <TableCell className="text-center">{row.puertos_dvr || "-"}</TableCell>
+                      <TableCell className="text-center">
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-500/20 text-blue-400">
+                          {row.cams_instaladas || 0}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs ${
+                          row.cam_audio > 0 ? "bg-emerald-500/20 text-emerald-400" : "bg-slate-700/50 text-slate-400"
+                        }`}>
+                          {row.cam_audio || 0}
+                        </span>
+                      </TableCell>
+                      {isAdmin && (
+                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              data-testid={`edit-row-${row.id}`}
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openEditDialog(row)}
+                              className="text-slate-400 hover:text-white hover:bg-slate-800 h-8 w-8 p-0"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              data-testid={`delete-row-${row.id}`}
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openDeleteDialog(row)}
+                              className="text-slate-400 hover:text-red-400 hover:bg-red-500/10 h-8 w-8 p-0"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-slate-800">
+              <p className="text-sm text-slate-400">
+                Página {currentPage} de {totalPages}
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  data-testid="prev-page-btn"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="border-slate-700 hover:bg-slate-800 disabled:opacity-50"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <Button
+                  data-testid="next-page-btn"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="border-slate-700 hover:bg-slate-800 disabled:opacity-50"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Edit Dialog */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
