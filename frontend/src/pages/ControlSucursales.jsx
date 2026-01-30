@@ -570,8 +570,44 @@ const ControlSucursales = ({ token, userRole }) => {
               <Input
                 data-testid="edit-audio"
                 type="number"
-                value={editData.cam_audio || ""}
+                value={editData.cam_audio ?? ""}
                 onChange={(e) => setEditData({ ...editData, cam_audio: parseInt(e.target.value) || 0 })}
+                className="bg-slate-900 border-slate-800"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Código Verificación</Label>
+              <Input
+                data-testid="edit-cod-verif"
+                value={editData.cod_verif || ""}
+                onChange={(e) => setEditData({ ...editData, cod_verif: e.target.value })}
+                className="bg-slate-900 border-slate-800"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Usuario</Label>
+              <Input
+                data-testid="edit-usuario"
+                value={editData.usuario || ""}
+                onChange={(e) => setEditData({ ...editData, usuario: e.target.value })}
+                className="bg-slate-900 border-slate-800"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Contraseña</Label>
+              <Input
+                data-testid="edit-password"
+                value={editData.password || ""}
+                onChange={(e) => setEditData({ ...editData, password: e.target.value })}
+                className="bg-slate-900 border-slate-800"
+              />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label>Ubicación DVR Aproximada</Label>
+              <Input
+                data-testid="edit-ubi-dvr"
+                value={editData.ubi_dvr_aprox || ""}
+                onChange={(e) => setEditData({ ...editData, ubi_dvr_aprox: e.target.value })}
                 className="bg-slate-900 border-slate-800"
               />
             </div>
