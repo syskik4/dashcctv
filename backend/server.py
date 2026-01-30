@@ -454,6 +454,10 @@ class SucursalUpdate(BaseModel):
     cam_audio: Optional[int] = None
     region: Optional[str] = None
     tipo_instalacion: Optional[str] = None
+    cod_verif: Optional[str] = None
+    usuario: Optional[str] = None
+    password: Optional[str] = None
+    ubi_dvr_aprox: Optional[str] = None
 
 @api_router.put("/sucursal/{sucursal_id}")
 async def update_sucursal(sucursal_id: str, data: SucursalUpdate, current_user: dict = Depends(require_admin)):
