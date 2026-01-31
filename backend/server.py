@@ -173,6 +173,17 @@ async def create_users_table():
         """))
         await session.commit()
         
+        # Add status columns to Control table if not exist
+        try:
+            await session.execute(text("""
+                ALTER TABLE "Control" 
+                ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'Unknown',
+                ADD COLUMN IF NOT EXISTS last_check TIMESTAMP
+            """))
+            await session.commit()
+        except Exception as e:
+            print(f"Columns may already exist: {e}")
+        
         # Check if admin exists, if not create default admin
         result = await session.execute(
             text("SELECT id FROM usuarios WHERE rol = 'admin' LIMIT 1")
