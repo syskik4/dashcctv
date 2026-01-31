@@ -411,9 +411,11 @@ const ControlSucursales = ({ token, userRole }) => {
                       </TableCell>
                       <TableCell className="text-center">
                         <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs ${
-                          row.cam_audio > 0 ? "bg-emerald-500/20 text-emerald-400" : "bg-slate-700/50 text-slate-400"
+                          row.cam_audio === true || (typeof row.cam_audio === 'number' && row.cam_audio > 0)
+                            ? "bg-emerald-500/20 text-emerald-400" 
+                            : "bg-slate-700/50 text-slate-400"
                         }`}>
-                          {row.cam_audio || 0}
+                          {row.cam_audio === true ? "Sí" : row.cam_audio === false ? "No" : (row.cam_audio || 0)}
                         </span>
                       </TableCell>
                       {isAdmin && (
