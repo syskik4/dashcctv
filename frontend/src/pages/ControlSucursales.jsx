@@ -320,7 +320,13 @@ const ControlSucursales = ({ token, userRole }) => {
               <InfoItem icon={Monitor} label="Modelo DVR" value={selectedSucursal.modelo_dvr || "No especificado"} color="indigo" />
               <InfoItem icon={Server} label="Puertos DVR" value={selectedSucursal.puertos_dvr || 0} color="cyan" />
               <InfoItem icon={Camera} label="Cámaras Instaladas" value={selectedSucursal.cams_instaladas || 0} color="emerald" highlight />
-              <InfoItem icon={Volume2} label="Cámaras con Audio" value={selectedSucursal.cam_audio ?? 0} color="amber" highlight />
+              <InfoItem 
+                icon={Volume2} 
+                label="Cámaras con Audio" 
+                value={selectedSucursal.cam_audio === true ? "Sí" : selectedSucursal.cam_audio === false ? "No" : (selectedSucursal.cam_audio ?? 0)} 
+                color="amber" 
+                highlight 
+              />
               <InfoItem icon={Hash} label="Código Verificación" value={selectedSucursal.cod_verif || "No especificado"} color="blue" mono />
               <InfoItem icon={User} label="Usuario" value={selectedSucursal.usuario || "No especificado"} color="indigo" />
               <InfoItem icon={Lock} label="Contraseña" value={selectedSucursal.password || "No especificada"} color="rose" mono />
