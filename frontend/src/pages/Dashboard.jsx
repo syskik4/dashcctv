@@ -54,6 +54,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import UserManagement from "./UserManagement";
 import ControlSucursales from "./ControlSucursales";
+import StatusSucursales from "./StatusSucursales";
 import Login from "./Login";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
