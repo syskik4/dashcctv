@@ -293,6 +293,14 @@ const Dashboard = () => {
               <MapPin className="w-4 h-4 mr-2" />
               Control Sucursales
             </TabsTrigger>
+            <TabsTrigger
+              data-testid="tab-status"
+              value="status"
+              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+            >
+              <Wifi className="w-4 h-4 mr-2" />
+              Status Sucursales
+            </TabsTrigger>
             {user.rol === "admin" && (
               <TabsTrigger
                 data-testid="tab-users"
