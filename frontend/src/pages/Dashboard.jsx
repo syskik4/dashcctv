@@ -460,6 +460,11 @@ const Dashboard = () => {
           <TabsContent value="sucursales">
             <ControlSucursales token={token} userRole={user.rol} />
           </TabsContent>
+
+          {/* Status Sucursales Tab */}
+          <TabsContent value="status">
+            <StatusSucursales token={token} userRole={user.rol} />
+          </TabsContent>
         </Tabs>
       </main>
 
