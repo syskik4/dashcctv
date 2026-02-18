@@ -514,6 +514,71 @@ async def delete_sucursal(sucursal_id: str, current_user: dict = Depends(require
         
         return {"message": "Sucursal eliminada correctamente"}
 
+# Status Sucursales Endpoints
+@api_router.get("/status/all")
+async def get_all_status(current_user: dict = Depends(get_current_user)):
+    """Get status of all sucursales"""
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            text('SELECT id, empresa, sucursal, region, status, last_check FROM "Control" ORDER BY status DESC, sucursal')
+        )
+        rows = result.fetchall()
+        columns = result.keys()
+        return [dict(zip(columns, row)) for row in rows]
+
+@api_router.get("/status/stats")
+async def get_status_stats(current_user: dict = Depends(get_current_user)):
+    """Get status statistics"""
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            text('SELECT status, COUNT(*) as count FROM "Control" GROUP BY status')
+        )
+        rows = result.fetchall()
+        
+        stats = {"Online": 0, "Offline": 0, "Unknown": 0, "total": 0}
+        for row in rows:
+            status_val = row[0] or "Unknown"
+            count = row[1]
+            if status_val in stats:
+                stats[status_val] = count
+            else:
+                stats["Unknown"] += count
+            stats["total"] += count
+        
+        return stats
+
+class StatusUpdate(BaseModel):
+    status: str
+    
+@api_router.put("/status/{sucursal_id}")
+async def update_status(sucursal_id: str, data: StatusUpdate, current_user: dict = Depends(require_admin)):
+    """Update status of a sucursal (admin only)"""
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            text('UPDATE "Control" SET status = :status, last_check = :last_check WHERE id = :id RETURNING id, sucursal, status, last_check'),
+            {"id": sucursal_id, "status": data.status, "last_check": datetime.now(timezone.utc)}
+        )
+        row = result.fetchone()
+        await session.commit()
+        
+        if not row:
+            raise HTTPException(status_code=404, detail="Sucursal no encontrada")
+        
+        return {"id": row[0], "sucursal": row[1], "status": row[2], "last_check": row[3].isoformat() if row[3] else None}
+
+@api_router.post("/status/sync-manual")
+async def manual_sync_status(current_user: dict = Depends(require_admin)):
+    """Trigger manual status update (simulated - real sync requires external script)"""
+    return {
+        "message": "Para sincronizar con Hik-Connect, ejecute el script sync_hikvision.py localmente",
+        "script_path": "/app/backend/sync_hikvision.py",
+        "instructions": [
+            "1. Configure las variables HIK_USER y HIK_PASS",
+            "2. Configure SUPABASE_KEY",
+            "3. Ejecute: python sync_hikvision.py"
+        ]
+    }
+
 # Include the router in the main app
 app.include_router(api_router)
 
