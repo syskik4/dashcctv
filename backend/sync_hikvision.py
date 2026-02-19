@@ -1,7 +1,7 @@
 """
 Script de sincronización con Hik-Connect
-Este script debe ejecutarse localmente o en un servidor con Chrome instalado.
 Sincroniza el estado de los dispositivos (Online/Offline) con Supabase.
+ACTUALIZADO: Ahora hace match por serie_dvr (Device Serial No.)
 """
 
 import time
@@ -17,42 +17,30 @@ from webdriver_manager.chrome import ChromeDriverManager
 from supabase import create_client
 from dotenv import load_dotenv
 
-# Cargar variables de entorno desde .env.hikvision
+# Cargar variables de entorno
 load_dotenv('.env.hikvision')
 
 # ============================================
-# CONFIGURACIÓN - MODIFICA ESTAS VARIABLES
+# CONFIGURACIÓN
 # ============================================
-
-# Supabase - Obtener de: https://supabase.com/dashboard/project/TU_PROYECTO/settings/api
 SUPABASE_URL = os.getenv("SUPABASE_URL", "https://miyvtmjwcdzbftixhety.supabase.co")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")  # ← REQUERIDO: Tu API Key de Supabase
-
-# Hik-Connect - Tus credenciales de login
-HIK_USER = os.getenv("HIK_USER", "")  # ← REQUERIDO: Tu usuario de Hik-Connect
-HIK_PASS = os.getenv("HIK_PASS", "")  # ← REQUERIDO: Tu contraseña de Hik-Connect
-
-# URL de la página de dispositivos de Hik-Connect
+SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
+HIK_USER = os.getenv("HIK_USER", "")
+HIK_PASS = os.getenv("HIK_PASS", "")
 URL_HIK = "https://ius.hik-connect.com/views/main/index.html#/common/personal/DeviceManagement"
-
-# Intervalo de sincronización en segundos (5 minutos por defecto)
 SYNC_INTERVAL = int(os.getenv("SYNC_INTERVAL", "300"))
 
-# ============================================
-# FUNCIONES DEL SCRIPT
-# ============================================
 
 def iniciar_driver():
-    """Inicializa el driver de Chrome con opciones configuradas"""
+    """Inicializa el driver de Chrome"""
     print("🔧 Iniciando navegador Chrome...")
     options = Options()
-    options.add_argument("--headless")  # Sin interfaz gráfica
+    options.add_argument("--headless")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
     options.add_argument("--disable-blink-features=AutomationControlled")
-    options.add_experimental_option("excludeSwitches", ["enable-automation"])
     
     try:
         driver = webdriver.Chrome(
@@ -63,10 +51,6 @@ def iniciar_driver():
         return driver
     except Exception as e:
         print(f"❌ Error al iniciar Chrome: {e}")
-        print("\n📋 Asegúrate de tener Chrome instalado:")
-        print("   - Windows: Descarga desde https://www.google.com/chrome/")
-        print("   - Linux: sudo apt install google-chrome-stable")
-        print("   - Mac: brew install --cask google-chrome")
         return None
 
 
@@ -79,7 +63,6 @@ def login_hik_connect(driver):
         
         wait = WebDriverWait(driver, 15)
         
-        # Campo de usuario
         print("📝 Ingresando credenciales...")
         user_input = wait.until(EC.presence_of_element_located(
             (By.CSS_SELECTOR, "input[type='text'], input[placeholder*='user'], input[placeholder*='email']")
@@ -87,12 +70,10 @@ def login_hik_connect(driver):
         user_input.clear()
         user_input.send_keys(HIK_USER)
         
-        # Campo de contraseña
         pass_input = driver.find_element(By.CSS_SELECTOR, "input[type='password']")
         pass_input.clear()
         pass_input.send_keys(HIK_PASS)
         
-        # Botón de login
         time.sleep(1)
         login_btn = driver.find_element(By.CSS_SELECTOR, "button[type='submit'], .login-btn, button.btn-primary")
         login_btn.click()
@@ -103,51 +84,51 @@ def login_hik_connect(driver):
         
     except Exception as e:
         print(f"❌ Error en login: {e}")
-        # Guardar screenshot para debug
-        try:
-            driver.save_screenshot("error_login.png")
-            print("📸 Screenshot guardado en error_login.png")
-        except:
-            pass
+        driver.save_screenshot("error_login.png")
         return False
 
 
 def obtener_estados_dispositivos(driver):
-    """Obtiene el estado de los dispositivos desde la tabla de Hik-Connect"""
+    """Obtiene el estado de los dispositivos desde Hik-Connect"""
     dispositivos = []
     
     try:
         print("🔍 Buscando dispositivos...")
-        wait = WebDriverWait(driver, 10)
+        time.sleep(3)
         
-        # Esperar a que cargue la tabla
-        time.sleep(5)
+        # Buscar todas las filas de la tabla
+        filas = driver.find_elements(By.CSS_SELECTOR, ".el-table__body tr, .el-table__row")
         
-        # Buscar filas de la tabla (ajustar selectores según la página real)
-        filas = driver.find_elements(By.CSS_SELECTOR, ".el-table__row, tr[class*='row'], .device-row")
+        print(f"   Filas encontradas: {len(filas)}")
         
         for fila in filas:
             try:
-                columnas = fila.find_elements(By.TAG_NAME, "td")
-                if len(columnas) > 0:
-                    # Obtener nombre del dispositivo
-                    nombre = columnas[0].text.strip()
-                    if not nombre:
-                        continue
+                celdas = fila.find_elements(By.TAG_NAME, "td")
+                
+                if len(celdas) >= 5:
+                    # Columnas según la imagen:
+                    # 0: Alias (nombre)
+                    # 1: Device Domain
+                    # 2: Device Serial No. (serie_dvr) ← ESTE ES EL QUE NECESITAMOS
+                    # 3: IP/Port No.
+                    # 4: Status
                     
-                    # Buscar el status (buscar en todas las columnas por texto Online/Offline)
-                    status_text = fila.text
-                    esta_online = "Online" in status_text or "En línea" in status_text or "Conectado" in status_text
+                    alias = celdas[0].text.strip()
+                    serial_no = celdas[2].text.strip()  # Device Serial No.
+                    status_text = celdas[4].text.strip()  # Status
                     
-                    dispositivos.append({
-                        "nombre": nombre,
-                        "status": "Online" if esta_online else "Offline"
-                    })
-                    
+                    if serial_no:
+                        esta_online = "Online" in status_text
+                        dispositivos.append({
+                            "alias": alias,
+                            "serie_dvr": serial_no,
+                            "status": "Online" if esta_online else "Offline"
+                        })
+                        
             except Exception as e:
                 continue
         
-        print(f"✅ Encontrados {len(dispositivos)} dispositivos")
+        print(f"✅ Encontrados {len(dispositivos)} dispositivos con Serial No.")
         return dispositivos
         
     except Exception as e:
@@ -156,27 +137,36 @@ def obtener_estados_dispositivos(driver):
 
 
 def actualizar_supabase(supabase, dispositivos):
-    """Actualiza el estado de los dispositivos en Supabase"""
+    """Actualiza el estado en Supabase usando serie_dvr como identificador"""
     actualizados = 0
+    no_encontrados = 0
     timestamp = datetime.now().isoformat()
     
-    print("💾 Actualizando base de datos...")
+    print("\n💾 Actualizando base de datos...")
+    print("-" * 60)
     
     for disp in dispositivos:
         try:
-            # Buscar en la tabla Control por nombre de sucursal
+            # Buscar por serie_dvr en lugar de sucursal
             resultado = supabase.table("Control").update({
                 "status": disp["status"],
                 "last_check": timestamp
-            }).eq("sucursal", disp["nombre"]).execute()
+            }).eq("serie_dvr", disp["serie_dvr"]).execute()
             
-            if resultado.data:
+            if resultado.data and len(resultado.data) > 0:
                 actualizados += 1
+                sucursal_nombre = resultado.data[0].get('sucursal', 'N/A')
                 icono = "🟢" if disp["status"] == "Online" else "🔴"
-                print(f"   {icono} {disp['nombre']}: {disp['status']}")
+                print(f"   {icono} {sucursal_nombre} ({disp['serie_dvr']}): {disp['status']}")
+            else:
+                no_encontrados += 1
+                print(f"   ⚠️ No encontrado: {disp['alias']} (Serial: {disp['serie_dvr']})")
                 
         except Exception as e:
-            print(f"   ⚠️ Error actualizando {disp['nombre']}: {e}")
+            print(f"   ❌ Error: {disp['alias']} - {e}")
+    
+    print("-" * 60)
+    print(f"📊 Resumen: {actualizados} actualizados, {no_encontrados} no encontrados")
     
     return actualizados
 
@@ -186,6 +176,7 @@ def sync_status():
     
     print("\n" + "="*60)
     print("   SINCRONIZACIÓN HIK-CONNECT → SUPABASE")
+    print("   (Matching por Device Serial No. / serie_dvr)")
     print("="*60 + "\n")
     
     # Validar credenciales
@@ -201,17 +192,16 @@ def sync_status():
         print("⚠️ ERRORES DE CONFIGURACIÓN:")
         for error in errores:
             print(f"   {error}")
-        print("\n📝 Configura las variables en el archivo .env.hikvision")
-        print("   o directamente en este script (líneas 25-30)")
         return
     
     print("📋 Configuración:")
     print(f"   - Supabase URL: {SUPABASE_URL}")
     print(f"   - Hik-Connect User: {HIK_USER}")
     print(f"   - Intervalo: {SYNC_INTERVAL//60} minutos")
+    print(f"   - Matching por: serie_dvr (Device Serial No.)")
     print()
     
-    # Crear cliente de Supabase
+    # Conectar a Supabase
     try:
         supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
         print("✅ Conexión a Supabase establecida")
@@ -219,13 +209,12 @@ def sync_status():
         print(f"❌ Error conectando a Supabase: {e}")
         return
     
-    # Iniciar driver
+    # Iniciar Chrome
     driver = iniciar_driver()
     if not driver:
         return
     
     try:
-        # Login en Hik-Connect
         if not login_hik_connect(driver):
             return
         
@@ -234,51 +223,34 @@ def sync_status():
             print(f"🕐 Sincronización: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             print("="*60)
             
-            # Obtener estados de dispositivos
             dispositivos = obtener_estados_dispositivos(driver)
             
             if dispositivos:
-                # Actualizar Supabase
                 actualizados = actualizar_supabase(supabase, dispositivos)
-                print(f"\n✅ Sincronización completada: {actualizados} registros actualizados")
+                print(f"\n✅ Sincronización completada: {actualizados} registros")
             else:
-                print("⚠️ No se encontraron dispositivos para sincronizar")
+                print("⚠️ No se encontraron dispositivos")
             
             print(f"\n⏳ Próxima sincronización en {SYNC_INTERVAL//60} minutos...")
             print("   (Presiona Ctrl+C para detener)")
             time.sleep(SYNC_INTERVAL)
             
-            # Refrescar la página para actualizar estados
-            print("\n🔄 Refrescando página...")
             driver.refresh()
             time.sleep(10)
             
     except KeyboardInterrupt:
-        print("\n\n✅ Sincronización detenida por el usuario")
+        print("\n\n✅ Sincronización detenida")
     except Exception as e:
         print(f"\n❌ Error: {e}")
     finally:
-        print("🔒 Cerrando navegador...")
         driver.quit()
 
-
-# ============================================
-# EJECUCIÓN DEL SCRIPT
-# ============================================
 
 if __name__ == "__main__":
     print("""
     ╔════════════════════════════════════════════════════════════╗
-    ║     SCRIPT DE SINCRONIZACIÓN HIK-CONNECT → SUPABASE        ║
-    ╠════════════════════════════════════════════════════════════╣
-    ║  REQUISITOS:                                               ║
-    ║  1. Python 3.8+                                            ║
-    ║  2. Google Chrome instalado                                ║
-    ║  3. Credenciales configuradas (ver abajo)                  ║
-    ╠════════════════════════════════════════════════════════════╣
-    ║  CONFIGURACIÓN:                                            ║
-    ║  Opción A: Editar archivo .env.hikvision                   ║
-    ║  Opción B: Editar variables en este script (líneas 25-30)  ║
+    ║     SYNC HIK-CONNECT → SUPABASE (v2.0)                     ║
+    ║     Matching por: Device Serial No. → serie_dvr            ║
     ╚════════════════════════════════════════════════════════════╝
     """)
     sync_status()
