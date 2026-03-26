@@ -273,10 +273,22 @@ const ControlSucursales = ({ token, userRole }) => {
       {/* Search Section */}
       <Card className="bg-slate-950/50 border-slate-800">
         <CardHeader className="pb-3">
-          <CardTitle className="text-lg font-semibold flex items-center gap-2">
-            <Building2 className="w-5 h-5 text-blue-400" strokeWidth={1.5} />
-            Control de Sucursales
-          </CardTitle>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <CardTitle className="text-lg font-semibold flex items-center gap-2">
+              <Building2 className="w-5 h-5 text-blue-400" strokeWidth={1.5} />
+              Control de Sucursales
+            </CardTitle>
+            {isAdmin && (
+              <Button
+                data-testid="create-sucursal-btn"
+                onClick={() => setShowCreateDialog(true)}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Nueva Sucursal
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col sm:flex-row gap-3">
