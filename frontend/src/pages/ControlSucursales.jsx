@@ -224,6 +224,46 @@ const ControlSucursales = ({ token, userRole }) => {
     }
   };
 
+  const handleCreate = async () => {
+    if (!createData.empresa || !createData.sucursal) {
+      toast.error("Empresa y Sucursal son campos requeridos");
+      return;
+    }
+
+    try {
+      const payload = {
+        ...createData,
+        puertos_dvr: createData.puertos_dvr ? parseInt(createData.puertos_dvr) : null,
+        cams_instaladas: createData.cams_instaladas ? parseInt(createData.cams_instaladas) : null,
+      };
+      
+      const response = await axiosAuth.post(`${API}/sucursal`, payload);
+      toast.success("Sucursal creada correctamente");
+      
+      // Add to local data
+      setAllData([response.data, ...allData]);
+      setShowCreateDialog(false);
+      setCreateData({
+        empresa: "",
+        sucursal: "",
+        region: "",
+        serie_dvr: "",
+        modelo_dvr: "",
+        puertos_dvr: "",
+        cams_instaladas: "",
+        cam_audio: false,
+        cod_verif: "",
+        usuario: "",
+        password: "",
+        tipo_instalacion: "",
+        ubi_dvr_aprox: ""
+      });
+    } catch (error) {
+      const message = error.response?.data?.detail || "Error al crear sucursal";
+      toast.error(message);
+    }
+  };
+
   const closeDetailCard = () => {
     setSelectedSucursal(null);
   };
