@@ -733,6 +733,183 @@ const ControlSucursales = ({ token, userRole }) => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Create Sucursal Dialog */}
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent className="bg-slate-950 border-slate-800 text-slate-50 max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus className="w-5 h-5 text-emerald-400" />
+              Nueva Sucursal
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Complete la información para registrar una nueva sucursal
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+            <div className="space-y-2">
+              <Label>Empresa *</Label>
+              <Input
+                data-testid="create-empresa"
+                value={createData.empresa}
+                onChange={(e) => setCreateData({ ...createData, empresa: e.target.value })}
+                placeholder="Nombre de la empresa"
+                className="bg-slate-900 border-slate-800"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Sucursal *</Label>
+              <Input
+                data-testid="create-sucursal"
+                value={createData.sucursal}
+                onChange={(e) => setCreateData({ ...createData, sucursal: e.target.value })}
+                placeholder="Nombre de la sucursal"
+                className="bg-slate-900 border-slate-800"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Región</Label>
+              <Input
+                data-testid="create-region"
+                value={createData.region}
+                onChange={(e) => setCreateData({ ...createData, region: e.target.value })}
+                placeholder="Ej: CDMX, HIDALGO, etc."
+                className="bg-slate-900 border-slate-800"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Tipo de Instalación</Label>
+              <Select
+                value={createData.tipo_instalacion}
+                onValueChange={(value) => setCreateData({ ...createData, tipo_instalacion: value })}
+              >
+                <SelectTrigger data-testid="create-tipo" className="bg-slate-900 border-slate-800">
+                  <SelectValue placeholder="Seleccionar tipo" />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-900 border-slate-800">
+                  <SelectItem value="BALUMS ETHERNET">BALUMS ETHERNET</SelectItem>
+                  <SelectItem value="TRANSCEPTORES">TRANSCEPTORES</SelectItem>
+                  <SelectItem value="MIXTA">MIXTA</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Serie DVR</Label>
+              <Input
+                data-testid="create-serie-dvr"
+                value={createData.serie_dvr}
+                onChange={(e) => setCreateData({ ...createData, serie_dvr: e.target.value })}
+                placeholder="Número de serie del DVR"
+                className="bg-slate-900 border-slate-800"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Modelo DVR</Label>
+              <Input
+                data-testid="create-modelo-dvr"
+                value={createData.modelo_dvr}
+                onChange={(e) => setCreateData({ ...createData, modelo_dvr: e.target.value })}
+                placeholder="Modelo del DVR"
+                className="bg-slate-900 border-slate-800"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Puertos DVR</Label>
+              <Input
+                data-testid="create-puertos"
+                type="number"
+                value={createData.puertos_dvr}
+                onChange={(e) => setCreateData({ ...createData, puertos_dvr: e.target.value })}
+                placeholder="Número de puertos"
+                className="bg-slate-900 border-slate-800"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Cámaras Instaladas</Label>
+              <Input
+                data-testid="create-cams"
+                type="number"
+                value={createData.cams_instaladas}
+                onChange={(e) => setCreateData({ ...createData, cams_instaladas: e.target.value })}
+                placeholder="Cantidad de cámaras"
+                className="bg-slate-900 border-slate-800"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>¿Tiene Audio?</Label>
+              <Select
+                value={createData.cam_audio ? "true" : "false"}
+                onValueChange={(value) => setCreateData({ ...createData, cam_audio: value === "true" })}
+              >
+                <SelectTrigger data-testid="create-audio" className="bg-slate-900 border-slate-800">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-900 border-slate-800">
+                  <SelectItem value="true">Sí</SelectItem>
+                  <SelectItem value="false">No</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Código Verificación</Label>
+              <Input
+                data-testid="create-cod-verif"
+                value={createData.cod_verif}
+                onChange={(e) => setCreateData({ ...createData, cod_verif: e.target.value })}
+                placeholder="Código de verificación"
+                className="bg-slate-900 border-slate-800"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Usuario</Label>
+              <Input
+                data-testid="create-usuario"
+                value={createData.usuario}
+                onChange={(e) => setCreateData({ ...createData, usuario: e.target.value })}
+                placeholder="Usuario del DVR"
+                className="bg-slate-900 border-slate-800"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Contraseña</Label>
+              <Input
+                data-testid="create-password"
+                value={createData.password}
+                onChange={(e) => setCreateData({ ...createData, password: e.target.value })}
+                placeholder="Contraseña del DVR"
+                className="bg-slate-900 border-slate-800"
+              />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label>Ubicación DVR Aproximada</Label>
+              <Input
+                data-testid="create-ubi-dvr"
+                value={createData.ubi_dvr_aprox}
+                onChange={(e) => setCreateData({ ...createData, ubi_dvr_aprox: e.target.value })}
+                placeholder="Descripción de la ubicación física del DVR"
+                className="bg-slate-900 border-slate-800"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowCreateDialog(false)}
+              className="border-slate-700 hover:bg-slate-800"
+            >
+              Cancelar
+            </Button>
+            <Button
+              data-testid="confirm-create-sucursal"
+              onClick={handleCreate}
+              className="bg-emerald-600 hover:bg-emerald-700"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Crear Sucursal
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
