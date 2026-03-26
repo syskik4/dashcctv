@@ -514,6 +514,64 @@ async def delete_sucursal(sucursal_id: str, current_user: dict = Depends(require
         
         return {"message": "Sucursal eliminada correctamente"}
 
+class SucursalCreate(BaseModel):
+    empresa: str
+    sucursal: str
+    region: Optional[str] = None
+    serie_dvr: Optional[str] = None
+    modelo_dvr: Optional[str] = None
+    puertos_dvr: Optional[int] = None
+    cams_instaladas: Optional[int] = None
+    cam_audio: Optional[bool] = None
+    cod_verif: Optional[str] = None
+    usuario: Optional[str] = None
+    password: Optional[str] = None
+    tipo_instalacion: Optional[str] = None
+    ubi_dvr_aprox: Optional[str] = None
+
+@api_router.post("/sucursal")
+async def create_sucursal(data: SucursalCreate, current_user: dict = Depends(require_admin)):
+    """Create a new sucursal (admin only)"""
+    async with AsyncSessionLocal() as session:
+        # Check if serie_dvr already exists
+        if data.serie_dvr:
+            existing = await session.execute(
+                text('SELECT id FROM "Control" WHERE serie_dvr = :serie_dvr'),
+                {"serie_dvr": data.serie_dvr}
+            )
+            if existing.fetchone():
+                raise HTTPException(status_code=400, detail="Ya existe una sucursal con esa serie DVR")
+        
+        result = await session.execute(
+            text('''
+                INSERT INTO "Control" (empresa, sucursal, region, serie_dvr, modelo_dvr, puertos_dvr, 
+                    cams_instaladas, cam_audio, cod_verif, usuario, password, tipo_instalacion, ubi_dvr_aprox, status)
+                VALUES (:empresa, :sucursal, :region, :serie_dvr, :modelo_dvr, :puertos_dvr,
+                    :cams_instaladas, :cam_audio, :cod_verif, :usuario, :password, :tipo_instalacion, :ubi_dvr_aprox, 'Unknown')
+                RETURNING *
+            '''),
+            {
+                "empresa": data.empresa,
+                "sucursal": data.sucursal,
+                "region": data.region,
+                "serie_dvr": data.serie_dvr,
+                "modelo_dvr": data.modelo_dvr,
+                "puertos_dvr": data.puertos_dvr,
+                "cams_instaladas": data.cams_instaladas,
+                "cam_audio": data.cam_audio,
+                "cod_verif": data.cod_verif,
+                "usuario": data.usuario,
+                "password": data.password,
+                "tipo_instalacion": data.tipo_instalacion,
+                "ubi_dvr_aprox": data.ubi_dvr_aprox
+            }
+        )
+        row = result.fetchone()
+        await session.commit()
+        
+        columns = result.keys()
+        return dict(zip(columns, row))
+
 # Status Sucursales Endpoints
 @api_router.get("/status/all")
 async def get_all_status(current_user: dict = Depends(get_current_user)):
