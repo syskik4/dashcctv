@@ -70,7 +70,23 @@ const ControlSucursales = ({ token, userRole }) => {
   const [loading, setLoading] = useState(true);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [editData, setEditData] = useState({});
+  const [createData, setCreateData] = useState({
+    empresa: "",
+    sucursal: "",
+    region: "",
+    serie_dvr: "",
+    modelo_dvr: "",
+    puertos_dvr: "",
+    cams_instaladas: "",
+    cam_audio: false,
+    cod_verif: "",
+    usuario: "",
+    password: "",
+    tipo_instalacion: "",
+    ubi_dvr_aprox: ""
+  });
   const [currentPage, setCurrentPage] = useState(1);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const itemsPerPage = 10;
