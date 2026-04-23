@@ -1,0 +1,54 @@
+{
+  "summary": "Final retest after cod_verif type fix (Optional[int] + field_validator '*' empty-string -> None on both SucursalCreate/SucursalUpdate). BACKEND PYTEST: 21/21 PASS (100%) including 4 NEW tests for cod_verif numeric-string coercion, empty-string optional fields, and PUT cod_verif coercion. FRONTEND E2E: BOTH flows pass - (a) minimal create (Empresa+Sucursal only, all optionals empty) -> 'Sucursal creada correctamente' toast + row visible + delete OK; (b) fully populated create with cod_verif='987654' -> success toast + row visible + persisted as int 987654 (verified via backend test) + delete OK. Zero leftover TEST_ rows in Supabase post-run.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "Protected endpoints",
+        "issue": "Return 403 instead of 401 when no Authorization header (FastAPI HTTPBearer default). Carried over from prior iterations - cosmetic."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard", "issues": ["Recharts width(-1)/height(-1) console warnings on initial render (cosmetic, charts render fine). Suggest setting minWidth/minHeight on ResponsiveContainer."]}
+    ]
+  },
+  "passed_tests": [
+    "pytest TestAuth (3/3): login_success, login_invalid, me",
+    "pytest TestReadEndpoints (4/4): get_control (no _id), get_stats, status_all, status_stats",
+    "pytest TestSucursalCRUD (8/8): 01_create, 02_get_created, 03_duplicate_serie_400, 04_create_requires_admin_403, 05_update, 06_update_requires_admin_403, 07_delete + GET 404, 08_delete_nonexistent",
+    "pytest TestSucursalCodVerifAndEmptyStrings (4/4 NEW): 09_create_cod_verif_numeric_string '123456' coerced to int + persisted; 10_create_with_empty_optional_strings ('' -> NULL for region/cod_verif/modelo_dvr/etc); 11_update_cod_verif_numeric_string '654321' coerced + persisted; 12_cleanup",
+    "pytest TestUserRegression (2/2): get_users_admin, get_users_non_admin_forbidden",
+    "Frontend E2E: admin login -> Control Sucursales nav",
+    "Frontend E2E A: '+ Nueva Sucursal' -> fill ONLY Empresa + Sucursal -> Submit -> success toast -> row visible -> delete OK",
+    "Frontend E2E B: '+ Nueva Sucursal' -> fill ALL fields incl. cod_verif='987654' (numeric string) -> Submit -> success toast -> row visible -> delete OK",
+    "DB cleanup verified: 0 leftover TEST_ rows"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_sucursal_crud.py",
+    "/app/test_reports/pytest/sucursal_results.xml"
+  ],
+  "action_items": [
+    "(Optional cosmetic) Fix Recharts ResponsiveContainer width/height warnings on Dashboard.",
+    "(Optional) Migrate deprecated @app.on_event to FastAPI lifespan context (carried over).",
+    "(Optional) Return 401 instead of 403 when Authorization header missing (carried over)."
+  ],
+  "critical_code_review_comments": [
+    "server.py SucursalCreate (L524-544) and SucursalUpdate (L458-478): cod_verif:Optional[int] + field_validator('*', mode='before') correctly normalizes '' -> None for all string fields. Clean fix - addresses the root cause from iteration_4.",
+    "server.py still uses deprecated @app.on_event - migrate to lifespan context manager.",
+    "server.py L22: ASYNC_DATABASE_URL = DATABASE_URL.replace(...) will raise AttributeError if DATABASE_URL missing; assert env var presence at startup (carried over)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_sucursal_crud.py (added TestSucursalCodVerifAndEmptyStrings class with 4 new tests + cleanup hook)"
+  ],
+  "success_rate": {"backend": "100% (21/21 pytest)", "frontend": "100% (both Nueva Sucursal flows + delete)"},
+  "test_credentials": "admin@sistema.com / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "All TEST_ rows (sucursales + non-admin user) created and cleaned up within the suite + autouse session-scoped cleanup fixture. Final verification via /api/control: 0 leftover TEST_ rows.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Sucursal CRUD is fully working end-to-end (backend + frontend). cod_verif type-mismatch bug from iteration_4 is fully resolved by the field_validator + Optional[int] change. Test file /app/backend/tests/test_sucursal_crud.py is the canonical regression suite (21 tests). For any future Sucursal changes, just rerun: pytest /app/backend/tests/test_sucursal_crud.py -v.",
+  "rca of the issue": "Resolved in iteration_5. iteration_4 RCA: cod_verif declared Optional[str] in Pydantic but Postgres column is INTEGER -> asyncpg raised DataError on every UI POST (frontend sends '' for unfilled optionals and numeric string for filled cod_verif). Main agent fix: (1) cod_verif: Optional[int] in both SucursalCreate and SucursalUpdate; (2) @field_validator('*', mode='before') on both models converts isinstance(v,str) and v.strip()=='' to None - this both lets Pydantic coerce numeric string '123456' -> 123456 via standard int validation AND silences empty strings for any Optional field. Verified by 4 new pytest cases + 2 frontend E2E flows."
+}

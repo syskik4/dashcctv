@@ -7,7 +7,7 @@ from sqlalchemy import text
 import os
 import logging
 from pathlib import Path
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from typing import List, Optional
 from datetime import datetime, timezone, timedelta
 from jose import jwt, JWTError
@@ -465,10 +465,17 @@ class SucursalUpdate(BaseModel):
     cam_audio: Optional[int] = None
     region: Optional[str] = None
     tipo_instalacion: Optional[str] = None
-    cod_verif: Optional[str] = None
+    cod_verif: Optional[int] = None
     usuario: Optional[str] = None
     password: Optional[str] = None
     ubi_dvr_aprox: Optional[str] = None
+
+    @field_validator('*', mode='before')
+    @classmethod
+    def empty_str_to_none(cls, v):
+        if isinstance(v, str) and v.strip() == '':
+            return None
+        return v
 
 @api_router.put("/sucursal/{sucursal_id}")
 async def update_sucursal(sucursal_id: str, data: SucursalUpdate, current_user: dict = Depends(require_admin)):
@@ -523,11 +530,18 @@ class SucursalCreate(BaseModel):
     puertos_dvr: Optional[int] = None
     cams_instaladas: Optional[int] = None
     cam_audio: Optional[bool] = None
-    cod_verif: Optional[str] = None
+    cod_verif: Optional[int] = None
     usuario: Optional[str] = None
     password: Optional[str] = None
     tipo_instalacion: Optional[str] = None
     ubi_dvr_aprox: Optional[str] = None
+
+    @field_validator('*', mode='before')
+    @classmethod
+    def empty_str_to_none(cls, v):
+        if isinstance(v, str) and v.strip() == '':
+            return None
+        return v
 
 @api_router.post("/sucursal")
 async def create_sucursal(data: SucursalCreate, current_user: dict = Depends(require_admin)):

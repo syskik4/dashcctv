@@ -188,6 +188,79 @@ class TestSucursalCRUD:
         assert r.status_code in (404, 500)  # depends on DB cast
 
 
+# ---------- NEW: cod_verif type coercion + empty-string handling ----------
+class TestSucursalCodVerifAndEmptyStrings:
+    """Validates field_validator: cod_verif numeric-string -> int, '' -> None"""
+    created_ids = []
+
+    def test_09_create_with_cod_verif_numeric_string(self, admin_headers):
+        payload = {
+            "empresa": "TEST_EMPRESA_CV",
+            "sucursal": f"TEST_SUC_CV_{UNIQUE_TS}",
+            "serie_dvr": f"TEST_SERIE_CV_{UNIQUE_TS}",
+            "cod_verif": "123456",  # numeric string -> should coerce to int
+            "puertos_dvr": 8,
+            "cams_instaladas": 4,
+        }
+        r = requests.post(f"{BASE_URL}/api/sucursal", json=payload,
+                          headers=admin_headers, timeout=30)
+        assert r.status_code == 200, f"create failed: {r.status_code} {r.text}"
+        d = r.json()
+        assert d["cod_verif"] == 123456 or str(d["cod_verif"]) == "123456"
+        TestSucursalCodVerifAndEmptyStrings.created_ids.append(d["id"])
+
+        # GET to verify persistence
+        r2 = requests.get(f"{BASE_URL}/api/sucursal/{d['id']}",
+                          headers=admin_headers, timeout=20)
+        assert r2.status_code == 200
+        d2 = r2.json()
+        assert int(d2["cod_verif"]) == 123456
+
+    def test_10_create_with_empty_optional_strings(self, admin_headers):
+        payload = {
+            "empresa": "TEST_EMPRESA_EMPTY",
+            "sucursal": f"TEST_SUC_EMPTY_{UNIQUE_TS}",
+            "region": "",
+            "serie_dvr": f"TEST_SERIE_EMPTY_{UNIQUE_TS}",
+            "modelo_dvr": "",
+            "cod_verif": "",
+            "usuario": "",
+            "password": "",
+            "tipo_instalacion": "",
+            "ubi_dvr_aprox": "",
+        }
+        r = requests.post(f"{BASE_URL}/api/sucursal", json=payload,
+                          headers=admin_headers, timeout=30)
+        assert r.status_code == 200, f"create failed: {r.status_code} {r.text}"
+        d = r.json()
+        TestSucursalCodVerifAndEmptyStrings.created_ids.append(d["id"])
+        # Empty strings should be stored as NULL
+        assert d.get("region") is None
+        assert d.get("cod_verif") is None
+        assert d.get("modelo_dvr") is None
+
+    def test_11_update_with_cod_verif_numeric_string(self, admin_headers):
+        assert TestSucursalCodVerifAndEmptyStrings.created_ids, "no sucursal to update"
+        sid = TestSucursalCodVerifAndEmptyStrings.created_ids[0]
+        r = requests.put(f"{BASE_URL}/api/sucursal/{sid}",
+                         json={"cod_verif": "654321"},
+                         headers=admin_headers, timeout=20)
+        assert r.status_code == 200, f"update failed: {r.status_code} {r.text}"
+        d = r.json()
+        assert int(d["cod_verif"]) == 654321
+        # GET verify
+        r2 = requests.get(f"{BASE_URL}/api/sucursal/{sid}",
+                          headers=admin_headers, timeout=20)
+        assert r2.status_code == 200
+        assert int(r2.json()["cod_verif"]) == 654321
+
+    def test_12_cleanup_codverif_rows(self, admin_headers):
+        for sid in TestSucursalCodVerifAndEmptyStrings.created_ids:
+            requests.delete(f"{BASE_URL}/api/sucursal/{sid}",
+                            headers=admin_headers, timeout=20)
+        TestSucursalCodVerifAndEmptyStrings.created_ids = []
+
+
 # ---------- User Management quick regression ----------
 class TestUserRegression:
     def test_get_users_admin(self, admin_headers):
@@ -207,6 +280,12 @@ def _cleanup(admin_headers):
     yield
     sid = TestSucursalCRUD.created_id
     if sid:
+        try:
+            requests.delete(f"{BASE_URL}/api/sucursal/{sid}",
+                            headers=admin_headers, timeout=20)
+        except Exception:
+            pass
+    for sid in TestSucursalCodVerifAndEmptyStrings.created_ids:
         try:
             requests.delete(f"{BASE_URL}/api/sucursal/{sid}",
                             headers=admin_headers, timeout=20)
