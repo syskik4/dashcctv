@@ -4,7 +4,7 @@ from datetime import datetime
 import json
 
 class AuthAPITester:
-    def __init__(self, base_url="https://security-lens-dash.preview.emergentagent.com/api"):
+    def __init__(self, base_url="https://dvr-monitor-sys.preview.emergentagent.com/api"):
         self.base_url = base_url
         self.token = None
         self.tests_run = 0
