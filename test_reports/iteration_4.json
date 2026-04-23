@@ -1,0 +1,75 @@
+{
+  "summary": "Retest after POST /api/sucursal fix. BACKEND PYTEST: 17/17 PASS (100%) - id generation fix works (A### computed from MAX before INSERT), duplicate serie_dvr returns 400, admin-only enforced, update/delete/404 all pass. NEW BUG FOUND ON FRONTEND E2E: The '+ Nueva Sucursal' form submission returns HTTP 500. RCA: DB column 'cod_verif' is INTEGER but backend Pydantic declares it as 'Optional[str]' (server.py:526, 468) and the frontend form sends it as a string (including empty '' when unfilled). asyncpg strictly rejects str for integer columns, so any POST from the UI fails. Pytest passes only because it omits cod_verif (None -> NULL works). Confirmed: A101 sample shows cod_verif is an int (e.g. 123456).",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/sucursal",
+        "issue": "Type mismatch: DB column 'cod_verif' is INTEGER but SucursalCreate/SucursalUpdate declare cod_verif as Optional[str]. Any payload (empty '' or numeric string) from frontend triggers asyncpg DataError: 'invalid input for query argument $10: ... str object cannot be interpreted as an integer'. Also applies to PUT /api/sucursal/{id} since SucursalUpdate has the same field type.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "POST /api/sucursal",
+        "issue": "Backend does not coerce empty strings ('') to None for Optional fields. If the DB adds more non-nullable or typed optional columns, similar failures will occur. Recommend empty-string -> None normalization in the endpoint (or via Pydantic validator)."
+      },
+      {
+        "endpoint": "Protected endpoints",
+        "issue": "Return 403 instead of 401 when no Authorization header (FastAPI HTTPBearer default). Same as prior iteration."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Create new sucursal (Control Sucursales -> + Nueva Sucursal -> Crear Sucursal)",
+        "issue": "Submission returns 500 -> toast 'Error al crear sucursal'. Root cause is the backend cod_verif type mismatch above. Additionally, handleCreate in ControlSucursales.jsx does not strip empty-string optional fields before POSTing.",
+        "affected_selectors": ["[data-testid=confirm-create-sucursal]", "[data-testid=create-cod-verif]"]
+      }
+    ],
+    "design_issues": [
+      {"screen": "Dashboard", "issues": ["Recharts 'width(-1) height(-1)' console warnings on initial render (cosmetic, charts render fine)"]}
+    ]
+  },
+  "passed_tests": [
+    "pytest TestAuth::test_login_success/test_login_invalid/test_me",
+    "pytest TestReadEndpoints::test_get_control/test_get_stats/test_status_all/test_status_stats",
+    "pytest TestSucursalCRUD::test_01_create_sucursal (200 + id 'A###' generated, no _id leak)",
+    "pytest TestSucursalCRUD::test_02_get_created_sucursal",
+    "pytest TestSucursalCRUD::test_03_create_duplicate_serie_returns_400 (now returns 400, not 500)",
+    "pytest TestSucursalCRUD::test_04_create_requires_admin (403)",
+    "pytest TestSucursalCRUD::test_05_update_sucursal (region + cams persisted)",
+    "pytest TestSucursalCRUD::test_06_update_requires_admin (403)",
+    "pytest TestSucursalCRUD::test_07_delete_sucursal (200 + subsequent GET 404)",
+    "pytest TestSucursalCRUD::test_08_delete_nonexistent_404",
+    "pytest TestUserRegression::test_get_users_admin/test_get_users_non_admin_forbidden",
+    "Frontend: admin login -> Dashboard renders with stats and charts",
+    "Frontend: tab navigation Dashboard/Control Sucursales works",
+    "Frontend: Nueva Sucursal modal opens with all 13 fields and data-testids"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_sucursal_crud.py",
+    "/app/test_reports/pytest/sucursal_results.xml"
+  ],
+  "action_items": [
+    "Fix cod_verif type mismatch. Recommended: change Pydantic model to cod_verif: Optional[int] = None in both SucursalCreate (server.py:526) and SucursalUpdate (server.py:468), AND in the endpoint coerce empty strings / invalid -> None before INSERT. Also update the frontend form to parseInt(cod_verif) before POST (ControlSucursales.jsx:234-240), matching how puertos_dvr/cams_instaladas are handled. Note: A101 sample showed cod_verif=123456 (int), confirming DB type.",
+    "Add a generic empty-string -> None normalization for all Optional string fields in create_sucursal / update_sucursal to prevent similar issues if other columns are strictly typed.",
+    "Verify PUT /api/sucursal/{id} behaves correctly with cod_verif payloads (same type mismatch likely reproduces)."
+  ],
+  "critical_code_review_comments": [
+    "server.py lines 463-470 (SucursalUpdate) and 519-530 (SucursalCreate): cod_verif typed as Optional[str] contradicts DB INTEGER column; this is the single root cause of all frontend create failures.",
+    "server.py create_sucursal/update_sucursal: no normalization of '' -> None; the frontend sends empty strings for every untouched optional field.",
+    "server.py still uses deprecated @app.on_event; migrate to lifespan context (carried over from iteration_3).",
+    "ControlSucursales.jsx handleCreate only parses puertos_dvr and cams_instaladas; should also parse cod_verif and null-out other empty optional strings before POST.",
+    "server.py line 22: ASYNC_DATABASE_URL = DATABASE_URL.replace(...) will AttributeError if DATABASE_URL missing; add assertion (carried over)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (17/17 pytest)", "frontend": "Create flow BLOCKED (0%) due to cod_verif type bug; rest of UI works"},
+  "test_credentials": "admin@sistema.com / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Pytest fixture creates+deletes TEST_user_<ts>@example.com. Pytest TestSucursalCRUD creates and deletes its own TEST_ sucursal within the suite. Verified post-run: 0 leftover TEST_ rows in DB.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend fix from iteration_3 (A### id generation) is verified working - all 17 pytest tests pass. However, the frontend create flow still fails because cod_verif is Optional[str] in Pydantic but INTEGER in Postgres. After main agent fixes the type (Pydantic Optional[int] + frontend parseInt, and '' -> None normalization), rerun /app/backend/tests/test_sucursal_crud.py AND exercise the frontend 'Nueva Sucursal' flow with BOTH empty optional fields and fully populated forms. Also verify PUT with cod_verif payload. Clean up TEST_ prefixed rows if any linger (use GET /api/control filter and DELETE).",
+  "rca of the issue": "When admin clicks '+ Nueva Sucursal' and submits, the UI POSTs {..., cod_verif: ''} (or a numeric string if filled). Backend SucursalCreate declares cod_verif: Optional[str] so Pydantic passes the string through untouched. The INSERT then binds parameter $10 to a string value, but asyncpg detects the target Postgres column is INTEGER and raises asyncpg.exceptions.DataError: 'invalid input for query argument $10: <value> (str object cannot be interpreted as an integer)'. The request returns HTTP 500 and the UI shows toast 'Error al crear sucursal'. Mitigation: (a) update Pydantic models to cod_verif: Optional[int], (b) coerce '' -> None prior to execute, (c) parseInt on the frontend like puertos_dvr/cams_instaladas. The prior id-generation fix (A### from MAX + 1) is correct and verified by pytest."
+}

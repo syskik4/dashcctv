@@ -541,16 +541,28 @@ async def create_sucursal(data: SucursalCreate, current_user: dict = Depends(req
             )
             if existing.fetchone():
                 raise HTTPException(status_code=400, detail="Ya existe una sucursal con esa serie DVR")
-        
+
+        # Generate next id following existing 'A###' convention (e.g. A101, A102...)
+        next_id_result = await session.execute(
+            text('''
+                SELECT COALESCE(MAX(CAST(SUBSTRING(id FROM 2) AS INTEGER)), 100) + 1 AS next_num
+                FROM "Control"
+                WHERE id ~ '^A[0-9]+$'
+            ''')
+        )
+        next_num = next_id_result.scalar() or 101
+        new_id = f"A{next_num}"
+
         result = await session.execute(
             text('''
-                INSERT INTO "Control" (empresa, sucursal, region, serie_dvr, modelo_dvr, puertos_dvr, 
+                INSERT INTO "Control" (id, empresa, sucursal, region, serie_dvr, modelo_dvr, puertos_dvr, 
                     cams_instaladas, cam_audio, cod_verif, usuario, password, tipo_instalacion, ubi_dvr_aprox, status)
-                VALUES (:empresa, :sucursal, :region, :serie_dvr, :modelo_dvr, :puertos_dvr,
+                VALUES (:id, :empresa, :sucursal, :region, :serie_dvr, :modelo_dvr, :puertos_dvr,
                     :cams_instaladas, :cam_audio, :cod_verif, :usuario, :password, :tipo_instalacion, :ubi_dvr_aprox, 'Unknown')
                 RETURNING *
             '''),
             {
+                "id": new_id,
                 "empresa": data.empresa,
                 "sucursal": data.sucursal,
                 "region": data.region,
