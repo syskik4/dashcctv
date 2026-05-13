@@ -1,7 +1,7 @@
 """
 Script de sincronización con Hik-Connect
-Sincroniza el estado de los dispositivos (Online/Offline) con Supabase.
-ACTUALIZADO: Ahora hace match por serie_dvr (Device Serial No.)
+Sincroniza el estado de los dispositivos (Online/Offline) con la base de datos
+de Supabase usando SQLAlchemy (pooler) directamente - NO requiere SUPABASE_KEY.
 """
 
 import time
@@ -14,17 +14,20 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
-from supabase import create_client
 from dotenv import load_dotenv
+from pathlib import Path
 
-# Cargar variables de entorno
-load_dotenv('.env.hikvision')
+from db_sync import get_engine, bulk_update_devices
+
+# Cargar variables de entorno (backend/.env + .env.hikvision si existe)
+ROOT_DIR = Path(__file__).parent
+load_dotenv(ROOT_DIR / '.env')
+if (ROOT_DIR / '.env.hikvision').exists():
+    load_dotenv(ROOT_DIR / '.env.hikvision', override=False)
 
 # ============================================
 # CONFIGURACIÓN
 # ============================================
-SUPABASE_URL = os.getenv("SUPABASE_URL", "https://miyvtmjwcdzbftixhety.supabase.co")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 HIK_USER = os.getenv("HIK_USER", "")
 HIK_PASS = os.getenv("HIK_PASS", "")
 URL_HIK = "https://ius.hik-connect.com/views/main/index.html#/common/personal/DeviceManagement"
@@ -136,39 +139,17 @@ def obtener_estados_dispositivos(driver):
         return []
 
 
-def actualizar_supabase(supabase, dispositivos):
-    """Actualiza el estado en Supabase usando serie_dvr como identificador"""
-    actualizados = 0
-    no_encontrados = 0
-    timestamp = datetime.now().isoformat()
-    
+def actualizar_supabase(engine, dispositivos):
+    """Actualiza el estado en Supabase usando serie_dvr como identificador (SQLAlchemy directo)"""
     print("\n💾 Actualizando base de datos...")
     print("-" * 60)
-    
-    for disp in dispositivos:
-        try:
-            # Buscar por serie_dvr en lugar de sucursal
-            resultado = supabase.table("Control").update({
-                "status": disp["status"],
-                "last_check": timestamp
-            }).eq("serie_dvr", disp["serie_dvr"]).execute()
-            
-            if resultado.data and len(resultado.data) > 0:
-                actualizados += 1
-                sucursal_nombre = resultado.data[0].get('sucursal', 'N/A')
-                icono = "🟢" if disp["status"] == "Online" else "🔴"
-                print(f"   {icono} {sucursal_nombre} ({disp['serie_dvr']}): {disp['status']}")
-            else:
-                no_encontrados += 1
-                print(f"   ⚠️ No encontrado: {disp['alias']} (Serial: {disp['serie_dvr']})")
-                
-        except Exception as e:
-            print(f"   ❌ Error: {disp['alias']} - {e}")
-    
+    resultado = bulk_update_devices(engine, dispositivos)
     print("-" * 60)
-    print(f"📊 Resumen: {actualizados} actualizados, {no_encontrados} no encontrados")
-    
-    return actualizados
+    print(f"📊 Resumen: {resultado['actualizados']} actualizados, {resultado['no_encontrados']} no encontrados")
+    if resultado['dispositivos_no_encontrados']:
+        for d in resultado['dispositivos_no_encontrados']:
+            print(f"   ⚠️ No encontrado: {d.get('alias','')} (Serial: {d.get('serie_dvr','')})")
+    return resultado['actualizados']
 
 
 def sync_status():
@@ -181,12 +162,12 @@ def sync_status():
     
     # Validar credenciales
     errores = []
-    if not SUPABASE_KEY:
-        errores.append("❌ SUPABASE_KEY no configurada")
     if not HIK_USER:
         errores.append("❌ HIK_USER no configurado")
     if not HIK_PASS:
         errores.append("❌ HIK_PASS no configurado")
+    if not os.getenv("DATABASE_URL"):
+        errores.append("❌ DATABASE_URL no configurado en backend/.env")
     
     if errores:
         print("⚠️ ERRORES DE CONFIGURACIÓN:")
@@ -195,16 +176,16 @@ def sync_status():
         return
     
     print("📋 Configuración:")
-    print(f"   - Supabase URL: {SUPABASE_URL}")
+    print(f"   - DB: Supabase via SQLAlchemy (pooler, usa DATABASE_URL)")
     print(f"   - Hik-Connect User: {HIK_USER}")
     print(f"   - Intervalo: {SYNC_INTERVAL//60} minutos")
     print(f"   - Matching por: serie_dvr (Device Serial No.)")
     print()
     
-    # Conectar a Supabase
+    # Conectar a Supabase vía SQLAlchemy (NO requiere SUPABASE_KEY)
     try:
-        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-        print("✅ Conexión a Supabase establecida")
+        engine = get_engine()
+        print("✅ Conexión a Supabase establecida (SQLAlchemy)")
     except Exception as e:
         print(f"❌ Error conectando a Supabase: {e}")
         return
@@ -226,7 +207,7 @@ def sync_status():
             dispositivos = obtener_estados_dispositivos(driver)
             
             if dispositivos:
-                actualizados = actualizar_supabase(supabase, dispositivos)
+                actualizados = actualizar_supabase(engine, dispositivos)
                 print(f"\n✅ Sincronización completada: {actualizados} registros")
             else:
                 print("⚠️ No se encontraron dispositivos")

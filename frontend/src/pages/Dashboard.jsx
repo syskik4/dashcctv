@@ -18,6 +18,7 @@ import {
   User,
   MapPin,
   Wifi,
+  Archive,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Input } from "../components/ui/input";
@@ -57,6 +58,7 @@ import UserManagement from "./UserManagement";
 import ControlSucursales from "./ControlSucursales";
 import StatusSucursales from "./StatusSucursales";
 import Login from "./Login";
+import { logError } from "../lib/logger";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -113,7 +115,7 @@ const Dashboard = () => {
       setTiposInstalacion(tiposRes.data);
       setControlData(controlRes.data);
     } catch (error) {
-      console.error("Error fetching data:", error);
+      logError("Error fetching data:", error);
       if (error.response?.status === 401) {
         handleLogout();
         toast.error("Sesión expirada, por favor inicie sesión nuevamente");
@@ -154,7 +156,7 @@ const Dashboard = () => {
         toast.success(`Se encontraron ${response.data.length} resultado(s)`);
       }
     } catch (error) {
-      console.error("Error searching:", error);
+      logError("Error searching:", error);
       toast.error("Error en la búsqueda");
     }
   };
@@ -316,7 +318,7 @@ const Dashboard = () => {
           {/* Dashboard Tab */}
           <TabsContent value="dashboard" className="space-y-6">
             {/* Stats Cards */}
-            <section data-testid="stats-section" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <section data-testid="stats-section" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
               <StatsCard
                 title="Sucursales Activas"
                 value={stats?.total_sucursales || 0}
@@ -350,6 +352,15 @@ const Dashboard = () => {
                 percentage={stats?.porcentaje_sin_audio || 0}
                 delay={3}
                 testId="stat-sin-audio"
+              />
+              <StatsCard
+                title="Gabinetes HK Instalados"
+                value={stats?.sucursales_con_gabinete || 0}
+                icon={Archive}
+                color="violet"
+                percentage={stats?.porcentaje_gabinete || 0}
+                delay={4}
+                testId="stat-gabinete"
               />
             </section>
 
@@ -536,8 +547,8 @@ const LoadingSkeleton = () => (
     <div className="max-w-7xl mx-auto space-y-6">
       <Skeleton className="h-16 w-full bg-slate-800" />
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[...Array(4)].map((_, i) => (
-          <Skeleton key={i} className="h-32 bg-slate-800" />
+        {["s1", "s2", "s3", "s4"].map((k) => (
+          <Skeleton key={k} className="h-32 bg-slate-800" />
         ))}
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

@@ -59,6 +59,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
+import { logError } from "../lib/logger";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -89,6 +90,9 @@ const ControlSucursales = ({ token, userRole }) => {
   });
   const [currentPage, setCurrentPage] = useState(1);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+  const [filterEmpresa, setFilterEmpresa] = useState("all");
+  const [filterRegion, setFilterRegion] = useState("all");
+  const [filterDate, setFilterDate] = useState("all"); // all | 24h | 7d | 30d | unchecked
   const itemsPerPage = 10;
 
   const isAdmin = userRole === "admin";
@@ -107,7 +111,7 @@ const ControlSucursales = ({ token, userRole }) => {
       const response = await axiosAuth.get(`${API}/control`);
       setAllData(response.data);
     } catch (error) {
-      console.error("Error fetching data:", error);
+      logError("Error fetching data:", error);
       toast.error("Error al cargar los datos");
     } finally {
       setLoading(false);
@@ -133,7 +137,7 @@ const ControlSucursales = ({ token, userRole }) => {
         toast.success(`Se encontraron ${response.data.length} sucursal(es)`);
       }
     } catch (error) {
-      console.error("Error searching:", error);
+      logError("Error searching:", error);
       toast.error("Error en la búsqueda");
     } finally {
       setLoading(false);
@@ -160,16 +164,58 @@ const ControlSucursales = ({ token, userRole }) => {
 
   const displayData = searchResults || allData;
 
+  // Unique empresa / region for filter dropdowns
+  const uniqueEmpresas = useMemo(() => {
+    const set = new Set(allData.map((s) => s.empresa).filter(Boolean));
+    return Array.from(set).sort();
+  }, [allData]);
+
+  const uniqueRegiones = useMemo(() => {
+    const set = new Set(allData.map((s) => s.region).filter(Boolean));
+    return Array.from(set).sort();
+  }, [allData]);
+
+  const filteredData = useMemo(() => {
+    const now = Date.now();
+    const dayMs = 24 * 60 * 60 * 1000;
+    return displayData.filter((s) => {
+      if (filterEmpresa !== "all" && s.empresa !== filterEmpresa) return false;
+      if (filterRegion !== "all" && s.region !== filterRegion) return false;
+      if (filterDate !== "all") {
+        if (filterDate === "unchecked") {
+          if (s.last_check) return false;
+        } else {
+          if (!s.last_check) return false;
+          const ts = new Date(s.last_check).getTime();
+          if (filterDate === "24h" && now - ts > dayMs) return false;
+          if (filterDate === "7d" && now - ts > 7 * dayMs) return false;
+          if (filterDate === "30d" && now - ts > 30 * dayMs) return false;
+        }
+      }
+      return true;
+    });
+  }, [displayData, filterEmpresa, filterRegion, filterDate]);
+
   const sortedData = useMemo(() => {
-    if (!sortConfig.key) return displayData;
-    return [...displayData].sort((a, b) => {
+    if (!sortConfig.key) return filteredData;
+    return [...filteredData].sort((a, b) => {
       const aVal = a[sortConfig.key] ?? "";
       const bVal = b[sortConfig.key] ?? "";
       if (aVal < bVal) return sortConfig.direction === "asc" ? -1 : 1;
       if (aVal > bVal) return sortConfig.direction === "asc" ? 1 : -1;
       return 0;
     });
-  }, [displayData, sortConfig]);
+  }, [filteredData, sortConfig]);
+
+  const clearFilters = () => {
+    setFilterEmpresa("all");
+    setFilterRegion("all");
+    setFilterDate("all");
+    setCurrentPage(1);
+  };
+
+  const filtersActive =
+    filterEmpresa !== "all" || filterRegion !== "all" || filterDate !== "all";
 
   const totalPages = Math.ceil(sortedData.length / itemsPerPage);
   const paginatedData = sortedData.slice(
@@ -328,6 +374,71 @@ const ControlSucursales = ({ token, userRole }) => {
           {searchResults && (
             <p className="text-sm text-slate-400 mt-3">
               Mostrando {searchResults.length} resultado(s) para "{searchTerm}"
+            </p>
+          )}
+
+          {/* Filters */}
+          <div className="mt-4 flex flex-col lg:flex-row gap-3 items-start lg:items-end">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-1 w-full">
+              <div>
+                <Label className="text-xs text-slate-400 mb-1 block">Empresa</Label>
+                <Select value={filterEmpresa} onValueChange={(v) => { setFilterEmpresa(v); setCurrentPage(1); }}>
+                  <SelectTrigger data-testid="filter-empresa" className="bg-slate-950 border-slate-800">
+                    <SelectValue placeholder="Todas las empresas" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-900 border-slate-800">
+                    <SelectItem value="all">Todas las empresas</SelectItem>
+                    {uniqueEmpresas.map((e) => (
+                      <SelectItem key={e} value={e}>{e}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs text-slate-400 mb-1 block">Región</Label>
+                <Select value={filterRegion} onValueChange={(v) => { setFilterRegion(v); setCurrentPage(1); }}>
+                  <SelectTrigger data-testid="filter-region" className="bg-slate-950 border-slate-800">
+                    <SelectValue placeholder="Todas las regiones" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-900 border-slate-800">
+                    <SelectItem value="all">Todas las regiones</SelectItem>
+                    {uniqueRegiones.map((r) => (
+                      <SelectItem key={r} value={r}>{r}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs text-slate-400 mb-1 block">Última verificación</Label>
+                <Select value={filterDate} onValueChange={(v) => { setFilterDate(v); setCurrentPage(1); }}>
+                  <SelectTrigger data-testid="filter-date" className="bg-slate-950 border-slate-800">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-900 border-slate-800">
+                    <SelectItem value="all">Cualquier fecha</SelectItem>
+                    <SelectItem value="24h">Últimas 24 h</SelectItem>
+                    <SelectItem value="7d">Últimos 7 días</SelectItem>
+                    <SelectItem value="30d">Últimos 30 días</SelectItem>
+                    <SelectItem value="unchecked">Sin verificación</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {filtersActive && (
+              <Button
+                data-testid="clear-filters-btn"
+                onClick={clearFilters}
+                variant="outline"
+                className="border-slate-700 hover:bg-slate-800 whitespace-nowrap"
+              >
+                <X className="w-4 h-4 mr-2" />
+                Limpiar filtros
+              </Button>
+            )}
+          </div>
+          {filtersActive && (
+            <p data-testid="filter-summary" className="text-xs text-slate-500 mt-2">
+              {sortedData.length} sucursal(es) coinciden con los filtros aplicados
             </p>
           )}
         </CardContent>

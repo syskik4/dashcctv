@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../co
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
+import { logError } from "../lib/logger";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -33,7 +34,7 @@ const Login = ({ onLogin }) => {
       toast.success(`Bienvenido, ${user.nombre}`);
       onLogin(user, access_token);
     } catch (error) {
-      console.error("Login error:", error);
+      logError("Login error:", error);
       const message = error.response?.data?.detail || "Error al iniciar sesión";
       toast.error(message);
     } finally {

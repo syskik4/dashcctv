@@ -105,6 +105,9 @@ class DashboardStats(BaseModel):
     camaras_sin_audio: int
     porcentaje_audio: float
     porcentaje_sin_audio: float
+    sucursales_con_gabinete: int
+    sucursales_sin_gabinete: int
+    porcentaje_gabinete: float
 
 class RegionData(BaseModel):
     region: str
@@ -379,16 +382,18 @@ async def get_all_control(current_user: dict = Depends(get_current_user)):
 @api_router.get("/stats", response_model=DashboardStats)
 async def get_dashboard_stats(current_user: dict = Depends(get_current_user)):
     async with AsyncSessionLocal() as session:
-        result = await session.execute(text('SELECT sucursal, cams_instaladas, cam_audio FROM "Control"'))
+        result = await session.execute(text('SELECT sucursal, cams_instaladas, cam_audio, "Gabinete HK" FROM "Control"'))
         rows = result.fetchall()
         
         sucursales = set()
         total_camaras = 0
         sucursales_con_audio = 0
         sucursales_sin_audio = 0
+        sucursales_con_gabinete = 0
+        sucursales_sin_gabinete = 0
         
         for row in rows:
-            sucursal, cams, audio = row
+            sucursal, cams, audio, gabinete = row
             if sucursal:
                 sucursales.add(sucursal)
             if cams:
@@ -397,10 +402,15 @@ async def get_dashboard_stats(current_user: dict = Depends(get_current_user)):
                 sucursales_con_audio += 1
             else:
                 sucursales_sin_audio += 1
+            if gabinete:
+                sucursales_con_gabinete += 1
+            else:
+                sucursales_sin_gabinete += 1
         
         total_registros = len(rows)
         porcentaje_audio = (sucursales_con_audio / total_registros * 100) if total_registros > 0 else 0
         porcentaje_sin_audio = (sucursales_sin_audio / total_registros * 100) if total_registros > 0 else 0
+        porcentaje_gabinete = (sucursales_con_gabinete / total_registros * 100) if total_registros > 0 else 0
         
         return DashboardStats(
             total_sucursales=len(sucursales),
@@ -408,7 +418,10 @@ async def get_dashboard_stats(current_user: dict = Depends(get_current_user)):
             camaras_con_audio=sucursales_con_audio,
             camaras_sin_audio=sucursales_sin_audio,
             porcentaje_audio=round(porcentaje_audio, 1),
-            porcentaje_sin_audio=round(porcentaje_sin_audio, 1)
+            porcentaje_sin_audio=round(porcentaje_sin_audio, 1),
+            sucursales_con_gabinete=sucursales_con_gabinete,
+            sucursales_sin_gabinete=sucursales_sin_gabinete,
+            porcentaje_gabinete=round(porcentaje_gabinete, 1),
         )
 
 @api_router.get("/regions", response_model=List[RegionData])
@@ -503,14 +516,27 @@ async def update_sucursal(sucursal_id: str, data: SucursalUpdate, current_user: 
             raise HTTPException(status_code=404, detail="Sucursal no encontrada")
         
         columns = result.keys()
-        return dict(zip(columns, row))
+        updated_dict = dict(zip(columns, row))
+
+        # Audit log
+        await log_audit(
+            session,
+            sucursal_id=str(updated_dict.get("id")),
+            sucursal_name=updated_dict.get("sucursal"),
+            action="UPDATE",
+            changed_fields=update_fields,
+            user_email=current_user.get("email", "unknown"),
+        )
+        await session.commit()
+
+        return updated_dict
 
 @api_router.delete("/sucursal/{sucursal_id}")
 async def delete_sucursal(sucursal_id: str, current_user: dict = Depends(require_admin)):
     """Delete a sucursal (admin only)"""
     async with AsyncSessionLocal() as session:
         result = await session.execute(
-            text('DELETE FROM "Control" WHERE id = :id RETURNING id'),
+            text('DELETE FROM "Control" WHERE id = :id RETURNING id, sucursal'),
             {"id": sucursal_id}
         )
         deleted = result.fetchone()
@@ -518,7 +544,18 @@ async def delete_sucursal(sucursal_id: str, current_user: dict = Depends(require
         
         if not deleted:
             raise HTTPException(status_code=404, detail="Sucursal no encontrada")
-        
+
+        # Audit log
+        await log_audit(
+            session,
+            sucursal_id=str(deleted[0]),
+            sucursal_name=deleted[1],
+            action="DELETE",
+            changed_fields=None,
+            user_email=current_user.get("email", "unknown"),
+        )
+        await session.commit()
+
         return {"message": "Sucursal eliminada correctamente"}
 
 class SucursalCreate(BaseModel):
@@ -596,7 +633,20 @@ async def create_sucursal(data: SucursalCreate, current_user: dict = Depends(req
         await session.commit()
         
         columns = result.keys()
-        return dict(zip(columns, row))
+        created_dict = dict(zip(columns, row))
+
+        # Audit log
+        await log_audit(
+            session,
+            sucursal_id=str(created_dict.get("id")),
+            sucursal_name=created_dict.get("sucursal"),
+            action="CREATE",
+            changed_fields=data.model_dump(exclude_none=True),
+            user_email=current_user.get("email", "unknown"),
+        )
+        await session.commit()
+
+        return created_dict
 
 # Status Sucursales Endpoints
 @api_router.get("/status/all")
@@ -662,6 +712,114 @@ async def manual_sync_status(current_user: dict = Depends(require_admin)):
             "3. Ejecute: python sync_hikvision.py"
         ]
     }
+
+# ============================================
+# ALERTS & AUDIT LOG
+# ============================================
+
+async def log_audit(session, sucursal_id: Optional[str], sucursal_name: Optional[str],
+                    action: str, changed_fields: Optional[dict], user_email: str):
+    """Insert an entry into audit_log. Caller is responsible for commit."""
+    import json as _json
+    await session.execute(
+        text('''
+            INSERT INTO audit_log (sucursal_id, sucursal_name, action, changed_fields, user_email)
+            VALUES (:sid, :sname, :action, CAST(:fields AS JSONB), :email)
+        '''),
+        {
+            "sid": sucursal_id,
+            "sname": sucursal_name,
+            "action": action,
+            "fields": _json.dumps(changed_fields) if changed_fields else None,
+            "email": user_email,
+        }
+    )
+
+
+@api_router.get("/alerts")
+async def get_alerts(current_user: dict = Depends(get_current_user)):
+    """Return alerts: offline sucursales, branches with 0 cams, branches without audio."""
+    async with AsyncSessionLocal() as session:
+        offline = await session.execute(
+            text('''
+                SELECT id, empresa, sucursal, region, status, last_check
+                FROM "Control"
+                WHERE status = 'Offline'
+                ORDER BY last_check DESC NULLS LAST
+                LIMIT 100
+            ''')
+        )
+        offline_rows = [dict(zip(offline.keys(), r)) for r in offline.fetchall()]
+
+        no_audio = await session.execute(
+            text('''
+                SELECT id, empresa, sucursal, region, cams_instaladas, cam_audio
+                FROM "Control"
+                WHERE (cam_audio IS NULL OR cam_audio = FALSE)
+                  AND cams_instaladas IS NOT NULL AND cams_instaladas > 0
+                ORDER BY sucursal
+                LIMIT 100
+            ''')
+        )
+        no_audio_rows = [dict(zip(no_audio.keys(), r)) for r in no_audio.fetchall()]
+
+        no_cams = await session.execute(
+            text('''
+                SELECT id, empresa, sucursal, region, cams_instaladas
+                FROM "Control"
+                WHERE cams_instaladas IS NULL OR cams_instaladas = 0
+                ORDER BY sucursal
+                LIMIT 100
+            ''')
+        )
+        no_cams_rows = [dict(zip(no_cams.keys(), r)) for r in no_cams.fetchall()]
+
+        return {
+            "offline": offline_rows,
+            "no_audio": no_audio_rows,
+            "no_cams": no_cams_rows,
+            "total_alerts": len(offline_rows) + len(no_audio_rows) + len(no_cams_rows),
+        }
+
+
+@api_router.get("/audit")
+async def get_audit_log(
+    limit: int = Query(100, ge=1, le=500),
+    action: Optional[str] = Query(None),
+    sucursal_id: Optional[str] = Query(None),
+    current_user: dict = Depends(get_current_user),
+):
+    """Return recent audit log entries. Supports optional filters."""
+    async with AsyncSessionLocal() as session:
+        where_clauses = []
+        params = {"limit": limit}
+        if action:
+            where_clauses.append("action = :action")
+            params["action"] = action
+        if sucursal_id:
+            where_clauses.append("sucursal_id = :sid")
+            params["sid"] = sucursal_id
+
+        where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+        result = await session.execute(
+            text(f'''
+                SELECT id, sucursal_id, sucursal_name, action, changed_fields, user_email, created_at
+                FROM audit_log
+                {where_sql}
+                ORDER BY created_at DESC
+                LIMIT :limit
+            '''),
+            params
+        )
+        rows = result.fetchall()
+        columns = result.keys()
+        output = []
+        for r in rows:
+            row_dict = dict(zip(columns, r))
+            if row_dict.get("created_at"):
+                row_dict["created_at"] = row_dict["created_at"].isoformat()
+            output.append(row_dict)
+        return output
 
 # Include the router in the main app
 app.include_router(api_router)

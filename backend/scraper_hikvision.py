@@ -1,6 +1,7 @@
 """
 Script de Scraping Hik-Connect → Supabase
-Extrae dispositivos de Hik-Connect y los guarda/actualiza en Supabase.
+Extrae dispositivos de Hik-Connect y actualiza su status en Supabase usando
+SQLAlchemy (pooler) directamente - NO requiere SUPABASE_KEY.
 Usa cookies para mantener la sesión y evitar logins repetidos.
 """
 
@@ -18,12 +19,15 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from webdriver_manager.chrome import ChromeDriverManager
-from supabase import create_client
 from dotenv import load_dotenv
 
-# Cargar variables de entorno
+from db_sync import get_engine, bulk_update_devices
+
+# Cargar variables de entorno (backend/.env + .env.hikvision si existe)
 ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env.hikvision')
+load_dotenv(ROOT_DIR / '.env')
+if (ROOT_DIR / '.env.hikvision').exists():
+    load_dotenv(ROOT_DIR / '.env.hikvision', override=False)
 
 # Configurar logging
 logging.basicConfig(
@@ -41,8 +45,6 @@ DEVICE_MANAGEMENT_URL = "https://ius.hik-connect.com/views/main/index.html#/comm
 BASE_URL = "https://ius.hik-connect.com"
 
 # Configuración
-SUPABASE_URL = os.getenv("SUPABASE_URL", "https://miyvtmjwcdzbftixhety.supabase.co")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 HIK_USER = os.getenv("HIK_USER", "")
 HIK_PASS = os.getenv("HIK_PASS", "")
 SYNC_INTERVAL = int(os.getenv("SYNC_INTERVAL", "300"))
@@ -371,49 +373,22 @@ def extract_devices(driver, wait):
 # Actualización en Supabase
 # ---------------------------------------------------------------------------
 
-def update_supabase(supabase, devices):
-    """Actualiza o inserta dispositivos en Supabase."""
-    actualizados = 0
-    insertados = 0
-    no_encontrados = []
-    timestamp = datetime.now(timezone.utc).isoformat()
-    
-    logger.info("\n💾 Actualizando Supabase...")
+def update_supabase(engine, devices):
+    """Actualiza dispositivos en Supabase usando SQLAlchemy (pooler)."""
+    logger.info("\n💾 Actualizando Supabase via SQLAlchemy...")
     logger.info("-" * 60)
-    
-    for disp in devices:
-        try:
-            # Intentar actualizar por serie_dvr
-            resultado = supabase.table("Control").update({
-                "status": disp["status"],
-                "last_check": timestamp
-            }).eq("serie_dvr", disp["serie_dvr"]).execute()
-            
-            if resultado.data and len(resultado.data) > 0:
-                actualizados += 1
-                sucursal_nombre = resultado.data[0].get('sucursal', 'N/A')
-                icono = "🟢" if disp["status"] == "Online" else "🔴"
-                logger.info(f"   {icono} Actualizado: {sucursal_nombre} ({disp['serie_dvr']})")
-            else:
-                no_encontrados.append(disp)
-                
-        except Exception as e:
-            logger.error(f"   ❌ Error actualizando {disp['alias']}: {e}")
-    
-    # Dispositivos no encontrados en la BD
-    if no_encontrados:
-        logger.info(f"\n⚠️ {len(no_encontrados)} dispositivos no encontrados en Supabase:")
-        for disp in no_encontrados:
-            logger.info(f"   - {disp['alias']} (Serial: {disp['serie_dvr']})")
-    
+    resultado = bulk_update_devices(engine, devices)
     logger.info("-" * 60)
-    logger.info(f"📊 Resumen: {actualizados} actualizados, {len(no_encontrados)} no encontrados")
-    
-    return {
-        "actualizados": actualizados,
-        "no_encontrados": len(no_encontrados),
-        "dispositivos_no_encontrados": no_encontrados
-    }
+    logger.info(
+        "📊 Resumen: %s actualizados, %s no encontrados",
+        resultado["actualizados"],
+        resultado["no_encontrados"],
+    )
+    if resultado["dispositivos_no_encontrados"]:
+        logger.info("⚠️ No encontrados en Supabase:")
+        for d in resultado["dispositivos_no_encontrados"]:
+            logger.info("   - %s (Serial: %s)", d.get("alias", ""), d.get("serie_dvr", ""))
+    return resultado
 
 
 # ---------------------------------------------------------------------------
@@ -430,30 +405,30 @@ def run_scraper():
     
     # Validar credenciales
     errores = []
-    if not SUPABASE_KEY:
-        errores.append("❌ SUPABASE_KEY no configurada")
     if not HIK_USER:
         errores.append("❌ HIK_USER no configurado")
     if not HIK_PASS:
         errores.append("❌ HIK_PASS no configurado")
+    if not os.getenv("DATABASE_URL"):
+        errores.append("❌ DATABASE_URL no configurado en backend/.env")
     
     if errores:
         print("⚠️ ERRORES DE CONFIGURACIÓN:")
         for error in errores:
             print(f"   {error}")
-        print("\n📝 Configure las variables en el archivo .env.hikvision")
+        print("\n📝 Configure las variables en backend/.env y .env.hikvision")
         return None
     
     print("📋 Configuración:")
-    print(f"   - Supabase URL: {SUPABASE_URL}")
+    print(f"   - DB: Supabase via SQLAlchemy (pooler, usa DATABASE_URL)")
     print(f"   - Hik-Connect User: {HIK_USER}")
     print(f"   - Intervalo: {SYNC_INTERVAL//60} minutos")
     print()
     
-    # Conectar a Supabase
+    # Conectar a Supabase vía SQLAlchemy (NO requiere SUPABASE_KEY)
     try:
-        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-        logger.info("✅ Conexión a Supabase establecida")
+        engine = get_engine()
+        logger.info("✅ Conexión a Supabase establecida (SQLAlchemy)")
     except Exception as e:
         logger.error(f"❌ Error conectando a Supabase: {e}")
         return None
@@ -498,7 +473,7 @@ def run_scraper():
             devices = extract_devices(driver, wait)
 
             if devices:
-                result = update_supabase(supabase, devices)
+                result = update_supabase(engine, devices)
                 print(f"\n✅ Sincronización completada: {result['actualizados']} actualizados")
             else:
                 print("⚠️ No se encontraron dispositivos")
@@ -529,11 +504,10 @@ if __name__ == "__main__":
     ║     SCRAPER HIK-CONNECT → SUPABASE                         ║
     ║     Con persistencia de sesión (cookies)                   ║
     ╠════════════════════════════════════════════════════════════╣
-    ║  CONFIGURACIÓN (.env.hikvision):                           ║
-    ║  - SUPABASE_URL                                            ║
-    ║  - SUPABASE_KEY (API Key anon/public)                      ║
-    ║  - HIK_USER                                                ║
-    ║  - HIK_PASS                                                ║
+    ║  CONFIGURACIÓN:                                            ║
+    ║  - DATABASE_URL (en backend/.env - ya configurado)         ║
+    ║  - HIK_USER     (en .env.hikvision)                        ║
+    ║  - HIK_PASS     (en .env.hikvision)                        ║
     ╚════════════════════════════════════════════════════════════╝
     """)
     run_scraper()

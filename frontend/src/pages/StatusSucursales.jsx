@@ -31,6 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
+import { logError } from "../lib/logger";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -62,7 +63,7 @@ const StatusSucursales = ({ token, userRole }) => {
       setStatusData(statusRes.data);
       setStats(statsRes.data);
     } catch (error) {
-      console.error("Error fetching status:", error);
+      logError("Error fetching status:", error);
       toast.error("Error al cargar el estado de sucursales");
     } finally {
       setLoading(false);

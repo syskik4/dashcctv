@@ -49,6 +49,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../components/ui/alert-dialog";
+import { logError } from "../lib/logger";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -81,7 +82,7 @@ const UserManagement = ({ token }) => {
       const response = await axiosAuth.get(`${API}/users`);
       setUsers(response.data);
     } catch (error) {
-      console.error("Error fetching users:", error);
+      logError("Error fetching users:", error);
       toast.error("Error al cargar usuarios");
     } finally {
       setLoading(false);
