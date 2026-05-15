@@ -498,6 +498,7 @@ const StatsCard = ({ title, value, icon: Icon, color, percentage, delay, testId 
     emerald: "text-emerald-400 bg-emerald-500/20",
     amber: "text-amber-400 bg-amber-500/20",
     rose: "text-rose-400 bg-rose-500/20",
+    violet: "text-violet-400 bg-violet-500/20",
   };
 
   const progressColors = {
@@ -505,6 +506,7 @@ const StatsCard = ({ title, value, icon: Icon, color, percentage, delay, testId 
     emerald: "bg-emerald-500",
     amber: "bg-amber-500",
     rose: "bg-rose-500",
+    violet: "bg-violet-500",
   };
 
   return (
