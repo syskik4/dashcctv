@@ -651,14 +651,41 @@ async def create_sucursal(data: SucursalCreate, current_user: dict = Depends(req
 # Status Sucursales Endpoints
 @api_router.get("/status/all")
 async def get_all_status(current_user: dict = Depends(get_current_user)):
-    """Get status of all sucursales"""
+    """Get status of all sucursales con tiempo sin conexion calculado"""
     async with AsyncSessionLocal() as session:
         result = await session.execute(
             text('SELECT id, empresa, sucursal, region, status, last_check FROM "Control" ORDER BY status DESC, sucursal')
         )
         rows = result.fetchall()
         columns = result.keys()
-        return [dict(zip(columns, row)) for row in rows]
+
+        now = datetime.now(timezone.utc)
+        output = []
+        for row in rows:
+            item = dict(zip(columns, row))
+            last_check = item.get("last_check")
+            status_val = item.get("status")
+
+            tiempo_segundos = None
+            if status_val == "Online":
+                # En línea -> 0 tiempo sin conexion
+                tiempo_segundos = 0
+            elif last_check:
+                # Si hay verificacion previa, contar segundos transcurridos
+                lc = last_check
+                if isinstance(lc, datetime):
+                    if lc.tzinfo is None:
+                        lc = lc.replace(tzinfo=timezone.utc)
+                    delta = (now - lc).total_seconds()
+                    tiempo_segundos = int(max(0, delta))
+
+            item["tiempo_sin_conexion_segundos"] = tiempo_segundos
+            # Normalize last_check serialization
+            if isinstance(item.get("last_check"), datetime):
+                item["last_check"] = item["last_check"].isoformat()
+            output.append(item)
+
+        return output
 
 @api_router.get("/status/stats")
 async def get_status_stats(current_user: dict = Depends(get_current_user)):
@@ -688,9 +715,11 @@ class StatusUpdate(BaseModel):
 async def update_status(sucursal_id: str, data: StatusUpdate, current_user: dict = Depends(require_admin)):
     """Update status of a sucursal (admin only)"""
     async with AsyncSessionLocal() as session:
+        # last_check column is timestamp WITHOUT timezone in this DB, store as naive UTC
+        now_naive = datetime.now(timezone.utc).replace(tzinfo=None)
         result = await session.execute(
             text('UPDATE "Control" SET status = :status, last_check = :last_check WHERE id = :id RETURNING id, sucursal, status, last_check'),
-            {"id": sucursal_id, "status": data.status, "last_check": datetime.now(timezone.utc)}
+            {"id": sucursal_id, "status": data.status, "last_check": now_naive}
         )
         row = result.fetchone()
         await session.commit()

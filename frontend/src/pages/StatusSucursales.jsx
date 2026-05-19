@@ -96,16 +96,44 @@ const StatusSucursales = ({ token, userRole }) => {
     return matchesSearch && matchesFilter;
   });
 
-  const formatLastCheck = (dateStr) => {
-    if (!dateStr) return "Sin verificar";
-    const date = new Date(dateStr);
-    return date.toLocaleString("es-MX", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+  const formatTiempoSinConexion = (item) => {
+    const status = item.status;
+    const seconds = item.tiempo_sin_conexion_segundos;
+
+    if (status === "Online") {
+      return { label: "En línea", color: "text-emerald-400" };
+    }
+    if (seconds === null || seconds === undefined) {
+      return { label: "Sin verificar", color: "text-slate-500" };
+    }
+
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    let label;
+    if (seconds < 60) {
+      label = `${seconds}s`;
+    } else if (minutes < 60) {
+      label = `${minutes} min`;
+    } else if (hours < 24) {
+      const remMin = minutes % 60;
+      label = remMin ? `${hours}h ${remMin}m` : `${hours}h`;
+    } else if (days < 30) {
+      const remHrs = hours % 24;
+      label = remHrs ? `${days}d ${remHrs}h` : `${days}d`;
+    } else {
+      const months = Math.floor(days / 30);
+      const remDays = days % 30;
+      label = remDays ? `${months}m ${remDays}d` : `${months} mes(es)`;
+    }
+
+    // Color por gravedad
+    let color = "text-amber-400";
+    if (days >= 7) color = "text-red-400";
+    else if (hours < 24) color = "text-amber-300";
+
+    return { label, color };
   };
 
   const getStatusIcon = (status) => {
@@ -232,7 +260,7 @@ const StatusSucursales = ({ token, userRole }) => {
                   <TableHead className="text-slate-400">Empresa</TableHead>
                   <TableHead className="text-slate-400">Región</TableHead>
                   <TableHead className="text-slate-400">Estado</TableHead>
-                  <TableHead className="text-slate-400">Última Verificación</TableHead>
+                  <TableHead className="text-slate-400">Tiempo sin conexión</TableHead>
                   {isAdmin && <TableHead className="text-slate-400 text-right">Acción</TableHead>}
                 </TableRow>
               </TableHeader>
@@ -270,11 +298,16 @@ const StatusSucursales = ({ token, userRole }) => {
                           {item.status === "Online" ? "En Línea" : item.status === "Offline" ? "Fuera de Línea" : "Sin Verificar"}
                         </span>
                       </TableCell>
-                      <TableCell className="text-slate-400 text-sm">
-                        <div className="flex items-center gap-1.5">
-                          <Clock className="w-3.5 h-3.5" />
-                          {formatLastCheck(item.last_check)}
-                        </div>
+                      <TableCell className="text-sm">
+                        {(() => {
+                          const t = formatTiempoSinConexion(item);
+                          return (
+                            <div data-testid={`tiempo-sin-conexion-${item.id}`} className={`flex items-center gap-1.5 ${t.color}`}>
+                              <Clock className="w-3.5 h-3.5" />
+                              {t.label}
+                            </div>
+                          );
+                        })()}
                       </TableCell>
                       {isAdmin && (
                         <TableCell className="text-right">
